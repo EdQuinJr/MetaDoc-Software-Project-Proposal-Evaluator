@@ -48,6 +48,7 @@ class User(BaseModel):
     
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     name = db.Column(db.String(255), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=True)  # For basic auth (nullable for OAuth users)
     role = db.Column(db.Enum(UserRole), default=UserRole.PROFESSOR, nullable=False)
     google_id = db.Column(db.String(255), unique=True, nullable=True)
     profile_picture = db.Column(db.String(500), nullable=True)

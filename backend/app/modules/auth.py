@@ -10,6 +10,7 @@ Implements SRS requirements:
 
 import os
 import json
+import hashlib
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, current_app, session, redirect, url_for
 from google.oauth2 import id_token
@@ -577,3 +578,151 @@ def generate_submission_token():
     except Exception as e:
         current_app.logger.error(f"Token generation failed: {e}")
         return jsonify({'error': 'Failed to generate token'}), 500
+
+
+# Helper functions for password hashing
+def hash_password(password):
+    """Hash password using SHA-256 with salt"""
+    salt = secrets.token_hex(16)
+    password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+    return f"{salt}:{password_hash}"
+
+def verify_password(password, stored_hash):
+    """Verify password against stored hash"""
+    try:
+        salt, password_hash = stored_hash.split(':')
+        return hashlib.sha256((password + salt).encode()).hexdigest() == password_hash
+    except:
+        return False
+
+
+@auth_bp.route('/register', methods=['POST'])
+def register():
+    """
+    Register a new user with email and password
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        name = data.get('name', '').strip()
+        
+        # Validation
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        if not password:
+            return jsonify({'error': 'Password is required'}), 400
+        if len(password) < 6:
+            return jsonify({'error': 'Password must be at least 6 characters'}), 400
+        if not name:
+            return jsonify({'error': 'Name is required'}), 400
+        
+        # Check if user already exists
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            return jsonify({'error': 'Email already registered'}), 409
+        
+        # Create new user
+        user = User(
+            email=email,
+            name=name,
+            password_hash=hash_password(password),
+            role=UserRole.PROFESSOR,
+            is_active=True,
+            created_at=datetime.utcnow()
+        )
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        # Log registration
+        AuditService.log_authentication_event('register', email, True)
+        
+        return jsonify({
+            'message': 'Registration successful',
+            'user': user.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Registration failed: {e}")
+        return jsonify({'error': 'Registration failed'}), 500
+
+
+@auth_bp.route('/login-basic', methods=['POST'])
+def login_basic():
+    """
+    Login with email and password
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        
+        # Validation
+        if not email or not password:
+            return jsonify({'error': 'Email and password are required'}), 400
+        
+        # Find user
+        user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            AuditService.log_authentication_event('login_attempt', email, False, 'User not found')
+            return jsonify({'error': 'Invalid email or password'}), 401
+        
+        # Check if user has password (might be OAuth-only user)
+        if not user.password_hash:
+            return jsonify({'error': 'Please use Google Sign-In for this account'}), 401
+        
+        # Verify password
+        if not verify_password(password, user.password_hash):
+            AuditService.log_authentication_event('login_attempt', email, False, 'Invalid password')
+            return jsonify({'error': 'Invalid email or password'}), 401
+        
+        # Check if user is active
+        if not user.is_active:
+            return jsonify({'error': 'Account is deactivated'}), 401
+        
+        # Update last login
+        user.last_login = datetime.utcnow()
+        
+        # Create session
+        session_token = secrets.token_urlsafe(64)
+        session_expiry = datetime.utcnow() + timedelta(
+            seconds=current_app.config.get('SESSION_TIMEOUT', 3600)
+        )
+        
+        user_session = UserSession(
+            session_token=session_token,
+            user_id=user.id,
+            expires_at=session_expiry,
+            ip_address=request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr),
+            user_agent=request.headers.get('User-Agent'),
+            is_active=True
+        )
+        
+        db.session.add(user_session)
+        db.session.commit()
+        
+        # Log successful login
+        AuditService.log_authentication_event('login_success', email, True)
+        
+        return jsonify({
+            'message': 'Login successful',
+            'session_token': session_token,
+            'user': user.to_dict(),
+            'expires_at': session_expiry.isoformat()
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Login failed: {e}")
+        return jsonify({'error': 'Login failed'}), 500
