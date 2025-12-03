@@ -207,6 +207,50 @@ class SubmissionService:
                 hash_sha256.update(chunk)
         return hash_sha256.hexdigest()
     
+    def check_duplicate_submission(self, file_hash=None, drive_link=None, professor_id=None, deadline_id=None):
+        """
+        Check if a file has already been submitted
+        
+        Args:
+            file_hash: SHA-256 hash of the file
+            drive_link: Google Drive link (if applicable)
+            professor_id: Professor ID to scope the check
+            deadline_id: Deadline ID to scope the check (optional)
+        
+        Returns:
+            tuple: (is_duplicate: bool, existing_submission: Submission or None)
+        """
+        query = Submission.query
+        
+        # Check by file hash (for both uploads and drive links)
+        if file_hash:
+            query = query.filter_by(file_hash=file_hash)
+        
+        # Check by Google Drive link (for drive link submissions)
+        if drive_link:
+            drive_query = Submission.query.filter_by(google_drive_link=drive_link)
+            if professor_id:
+                drive_query = drive_query.filter_by(professor_id=professor_id)
+            if deadline_id:
+                drive_query = drive_query.filter_by(deadline_id=deadline_id)
+            
+            existing = drive_query.first()
+            if existing:
+                return True, existing
+        
+        # Apply filters for hash-based check
+        if file_hash:
+            if professor_id:
+                query = query.filter_by(professor_id=professor_id)
+            if deadline_id:
+                query = query.filter_by(deadline_id=deadline_id)
+            
+            existing = query.first()
+            if existing:
+                return True, existing
+        
+        return False, None
+    
     def create_submission_record(self, **kwargs):
         """Create submission record in database"""
         submission = Submission(
@@ -344,6 +388,29 @@ def upload_file():
         file_hash = submission_service.calculate_file_hash(temp_path)
         file_size = os.path.getsize(temp_path)
         mime_type = mimetypes.guess_type(temp_path)[0] or 'application/octet-stream'
+        
+        # Check for duplicate submission
+        is_duplicate, existing_submission = submission_service.check_duplicate_submission(
+            file_hash=file_hash,
+            professor_id=professor_id,
+            deadline_id=deadline_id
+        )
+        
+        if is_duplicate:
+            # Clean up the temporary file
+            os.remove(temp_path)
+            
+            # Return error with details about the existing submission
+            return jsonify({
+                'error': 'This file has already been submitted',
+                'message': f'A file with identical content was already submitted on {existing_submission.created_at.strftime("%Y-%m-%d %H:%M:%S")}',
+                'existing_submission': {
+                    'job_id': existing_submission.job_id,
+                    'submitted_at': existing_submission.created_at.isoformat(),
+                    'original_filename': existing_submission.original_filename,
+                    'student_id': existing_submission.student_id
+                }
+            }), 409  # 409 Conflict status code
         
         # Create folder based on deadline title
         if deadline_id:
@@ -550,6 +617,37 @@ def submit_drive_link():
         # Calculate file hash
         file_hash = submission_service.calculate_file_hash(file_path)
         file_size = int(metadata.get('size', os.path.getsize(file_path)))
+        
+        # Check for duplicate submission (by hash and by drive link)
+        is_duplicate, existing_submission = submission_service.check_duplicate_submission(
+            file_hash=file_hash,
+            drive_link=drive_link,
+            professor_id=professor_id,
+            deadline_id=deadline_id
+        )
+        
+        if is_duplicate:
+            # Clean up the temporary file
+            os.remove(file_path)
+            
+            # Return error with details about the existing submission
+            error_message = {
+                'error': 'This file has already been submitted',
+                'existing_submission': {
+                    'job_id': existing_submission.job_id,
+                    'submitted_at': existing_submission.created_at.isoformat(),
+                    'original_filename': existing_submission.original_filename,
+                    'student_id': existing_submission.student_id
+                }
+            }
+            
+            # Add specific message based on submission type
+            if existing_submission.google_drive_link == drive_link:
+                error_message['message'] = f'This Google Drive link was already submitted on {existing_submission.created_at.strftime("%Y-%m-%d %H:%M:%S")}'
+            else:
+                error_message['message'] = f'A file with identical content was already submitted on {existing_submission.created_at.strftime("%Y-%m-%d %H:%M:%S")}'
+            
+            return jsonify(error_message), 409  # 409 Conflict status code
         
         # Create folder based on deadline title
         if deadline_id:
