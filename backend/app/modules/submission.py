@@ -610,6 +610,26 @@ def submit_drive_link():
             # Extract metadata
             doc_metadata, metadata_error = metadata_service.extract_docx_metadata(storage_path)
             if not metadata_error:
+                # Merge Google Drive metadata with document metadata
+                # Google Drive metadata has more accurate editor/owner information
+                if metadata.get('owners'):
+                    # Get the first owner's display name
+                    owner = metadata['owners'][0]
+                    if not doc_metadata.get('author') or doc_metadata['author'] == 'Unavailable':
+                        doc_metadata['author'] = owner.get('displayName', owner.get('emailAddress', 'Unavailable'))
+                
+                if metadata.get('lastModifyingUser'):
+                    # Get the last editor from Google Drive
+                    last_user = metadata['lastModifyingUser']
+                    doc_metadata['last_editor'] = last_user.get('displayName', last_user.get('emailAddress', 'Unavailable'))
+                
+                # Use Google Drive timestamps if document timestamps are missing
+                if metadata.get('createdTime') and not doc_metadata.get('creation_date'):
+                    doc_metadata['creation_date'] = metadata['createdTime']
+                
+                if metadata.get('modifiedTime'):
+                    doc_metadata['last_modified_date'] = metadata['modifiedTime']
+                
                 # Extract text
                 text, text_error = metadata_service.extract_document_text(storage_path)
                 if not text_error:

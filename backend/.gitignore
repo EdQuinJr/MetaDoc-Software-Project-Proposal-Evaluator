@@ -61,6 +61,11 @@ uploads/
 temp_files/
 reports/
 
+# Google credentials
+credentials/
+*.json
+!requirements.json
+
 # Coverage reports
 htmlcov/
 .tox/
