@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { submissionAPI, dashboardAPI } from '../services/api';
 import { Upload, Link as LinkIcon, FileText, CheckCircle, AlertCircle, Loader, LogOut, Calendar } from 'lucide-react';
-import './StudentSubmit.css';
+import '../styles/StudentSubmit.css';
 
 const StudentSubmit = () => {
   const navigate = useNavigate();

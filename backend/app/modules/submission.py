@@ -297,8 +297,7 @@ def upload_file():
             return jsonify({'error': 'No file selected'}), 400
         
         # Extract additional form data
-        student_name = request.form.get('student_name', '').strip()
-        student_email = request.form.get('student_email', '').strip()
+        student_id = request.form.get('student_id', '').strip()
         
         # Validate file
         validation_errors = submission_service.validate_file(file)
@@ -378,8 +377,7 @@ def upload_file():
             file_hash=file_hash,
             mime_type=mime_type,
             submission_type='upload',
-            student_name=student_name if student_name else None,
-            student_email=student_email if student_email else None,
+            student_id=student_id if student_id else None,
             deadline_id=deadline_id if deadline_id else None,
             professor_id=professor_id,
             status=SubmissionStatus.PENDING
@@ -437,6 +435,9 @@ def upload_file():
             submission.status = SubmissionStatus.PENDING
             db.session.commit()
         
+        # Refresh the submission to ensure all relationships are loaded
+        db.session.refresh(submission)
+        
         return jsonify({
             'message': 'File uploaded successfully',
             'job_id': submission.job_id,
@@ -450,8 +451,10 @@ def upload_file():
         }), 201
         
     except Exception as e:
+        import traceback
         current_app.logger.error(f"File upload error: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
 @submission_bp.route('/drive-link', methods=['POST'])
 def submit_drive_link():
@@ -481,8 +484,7 @@ def submit_drive_link():
         deadline_id = getattr(token_record, 'deadline_id', None)
         
         drive_link = data['drive_link'].strip()
-        student_name = data.get('student_name', '').strip()
-        student_email = data.get('student_email', '').strip()
+        student_id = data.get('student_id', '').strip()
         
         # Validate drive link format
         file_id, validation_error = submission_service.validate_drive_link(drive_link)
@@ -582,8 +584,7 @@ def submit_drive_link():
             mime_type=metadata['mimeType'],
             submission_type='drive_link',
             google_drive_link=drive_link,
-            student_name=student_name if student_name else None,
-            student_email=student_email if student_email else None,
+            student_id=student_id if student_id else None,
             deadline_id=deadline_id if deadline_id else None,
             professor_id=professor_id,
             status=SubmissionStatus.PENDING
@@ -656,8 +657,11 @@ def submit_drive_link():
         }), 201
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         current_app.logger.error(f"Drive link submission error: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
+        current_app.logger.error(f"Traceback: {error_details}")
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
 @submission_bp.route('/status/<job_id>', methods=['GET'])
 def get_submission_status(job_id):

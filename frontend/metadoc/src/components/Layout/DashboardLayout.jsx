@@ -12,7 +12,8 @@ import {
   X,
   User,
 } from 'lucide-react';
-import './DashboardLayout.css';
+import logo from '../../assets/images/logo.png';
+import '../../styles/DashboardLayout.css';
 
 const DashboardLayout = ({ children }) => {
   const { user, logout } = useAuth();
@@ -27,7 +28,7 @@ const DashboardLayout = ({ children }) => {
 
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
-    { path: '/dashboard/submissions', icon: FileText, label: 'Submissions' },
+    { path: '/dashboard/Files', icon: FileText, label: 'Files' },
     { path: '/dashboard/deadlines', icon: Calendar, label: 'Deadlines' },
     { path: '/dashboard/reports', icon: FileBarChart, label: 'Reports' },
   ];
@@ -45,7 +46,7 @@ const DashboardLayout = ({ children }) => {
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo">
-            <FileText size={32} className="logo-icon" />
+            <img src={logo} alt="MetaDoc Logo" className="sidebar-logo-img" />
             <span className="logo-text">MetaDoc</span>
           </div>
           <button

@@ -63,8 +63,15 @@ The server will start on `http://localhost:5000`
 ### Required Environment Variables
 
 ```env
-# Database
-DATABASE_URL=mysql+pymysql://username:password@localhost:3306/metadoc_db
+# Database (Choose one)
+# SQLite for development (no setup required)
+DATABASE_URL=sqlite:///metadoc.db
+
+# MySQL for production
+# DATABASE_URL=mysql+pymysql://username:password@localhost:3306/metadoc_db
+
+# PostgreSQL alternative
+# DATABASE_URL=postgresql://username:password@localhost:5432/metadoc_db
 
 # Google OAuth (Required)
 GOOGLE_CLIENT_ID=your_google_client_id
@@ -84,17 +91,114 @@ ALLOWED_EMAIL_DOMAINS=cit.edu,school.edu.ph
 INSTITUTION_NAME=Cebu Institute of Technology - University
 ```
 
-### Google Cloud Setup
+### Google Cloud Setup (Required)
 
-1. **Create Google Cloud Project**
-2. **Enable APIs:**
-   - Google Drive API
-   - Google OAuth2 API
-3. **Create OAuth 2.0 Credentials:**
-   - Add authorized redirect URI: `http://localhost:5000/api/v1/auth/callback`
-4. **Create Service Account:**
-   - Download JSON key file
-   - Grant Drive access permissions
+#### 1. Create Google Cloud Project
+- Go to [Google Cloud Console](https://console.cloud.google.com/)
+- Create a new project or select existing one
+- Note down your Project ID
+
+#### 2. Enable Required APIs
+- Navigate to "APIs & Services" → "Library"
+- Enable the following APIs:
+  - **Google Drive API**
+  - **Google OAuth2 API** (Google+ API)
+  - **Google Identity Services**
+
+#### 3. Create OAuth 2.0 Credentials
+- Go to "APIs & Services" → "Credentials"
+- Click "Create Credentials" → "OAuth 2.0 Client ID"
+- Choose "Web application" as application type
+- Set name: "MetaDoc Backend"
+- **Add Authorized redirect URIs** (CRITICAL):
+  ```
+  http://localhost:5000/auth/google/callback
+  http://127.0.0.1:5000/auth/google/callback
+  ```
+- Click "Create" and copy:
+  - **Client ID**: `381901409560-xxx.apps.googleusercontent.com`
+  - **Client Secret**: `GOCSPX-xxx`
+
+#### 4. Create Service Account (Optional - for Drive API)
+- Go to "IAM & Admin" → "Service Accounts"
+- Click "Create Service Account"
+- Set name: "metadoc-service-account"
+- Skip role assignment for now
+- Click "Done"
+- Click on created service account
+- Go to "Keys" tab → "Add Key" → "Create new key"
+- Choose JSON format and download
+- Save as `service-account-key.json` in backend folder
+
+#### 5. Configure OAuth Consent Screen
+- Go to "APIs & Services" → "OAuth consent screen"
+- Choose "Internal" (for organization use) or "External"
+- Fill required fields:
+  - App name: "MetaDoc"
+  - User support email: Your email
+  - Developer contact: Your email
+- Add authorized domains if needed
+- Save and continue through all steps
+
+## 🔧 Google OAuth2 Troubleshooting
+
+### Common OAuth Errors
+
+**Error 400: redirect_uri_mismatch**
+```
+The redirect URI in the request: http://localhost:5000/auth/google/callback 
+does not match the ones authorized for the OAuth client.
+```
+**Solution**: 
+- Check Google Cloud Console → Credentials → Your OAuth 2.0 Client
+- Ensure redirect URI exactly matches: `http://localhost:5000/auth/google/callback`
+- No trailing slashes, exact protocol (http vs https)
+
+**Error 403: access_denied**
+```
+The developer hasn't given you access to this app.
+```
+**Solution**: 
+- Configure OAuth consent screen properly
+- For internal use: Set to "Internal" and add authorized domains
+- For external use: Submit for verification or add test users
+
+**Error: invalid_client**
+```
+Unauthorized client or scope in request.
+```
+**Solution**: 
+- Verify GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env
+- Ensure APIs are enabled in Google Cloud Console
+- Check client ID matches the one from Google Console
+
+### Testing OAuth Setup
+
+1. **Test credentials**:
+```bash
+python -c "
+from app import create_app
+app = create_app()
+with app.app_context():
+    print('Client ID:', app.config.get('GOOGLE_CLIENT_ID'))
+    print('Redirect URI:', app.config.get('GOOGLE_REDIRECT_URI'))
+"
+```
+
+2. **Test auth endpoint**:
+```bash
+curl http://localhost:5000/auth/google
+```
+Should return a redirect URL to Google OAuth.
+
+### Domain Restrictions
+
+To restrict access to specific email domains:
+```env
+ALLOWED_EMAIL_DOMAINS=cit.edu,yourdomain.edu.ph
+```
+
+Users with emails outside these domains will be rejected after OAuth.
 
 ## 📡 API Endpoints
 

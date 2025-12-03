@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { LogIn, FileText, Shield, BarChart3, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
-import './Login.css';
+import '../styles/Login.css';
 
 const Login = () => {
   const { login, handleOAuthCallback } = useAuth();
@@ -113,9 +113,9 @@ const Login = () => {
     <div className="login-page">
       <div className="login-container">
         <div className="login-left">
-          <div className="login-branding">
-            <div className="logo-container">
-              <FileText size={48} className="logo-icon" />
+          <div className="brand-header">
+            <div className="brand-icon">
+              <FileText size={48} />
             </div>
             <h1 className="brand-title">MetaDoc</h1>
             <p className="brand-subtitle">

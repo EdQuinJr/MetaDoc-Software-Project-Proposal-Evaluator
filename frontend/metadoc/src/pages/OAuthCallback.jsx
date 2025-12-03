@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Loader, CheckCircle, XCircle } from 'lucide-react';
-import './OAuthCallback.css';
+import '../styles/OAuthCallback.css';
 
 const OAuthCallback = () => {
   const navigate = useNavigate();

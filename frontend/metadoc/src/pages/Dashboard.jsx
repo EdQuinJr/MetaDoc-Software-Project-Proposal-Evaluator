@@ -13,7 +13,7 @@ import {
   Copy,
   RefreshCw,
 } from 'lucide-react';
-import './Dashboard.css';
+import '../styles/Dashboard.css';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -25,6 +25,8 @@ const Dashboard = () => {
   const [copySuccess, setCopySuccess] = useState(false);
   const [deadlines, setDeadlines] = useState([]);
   const [selectedDeadline, setSelectedDeadline] = useState('');
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState({ title: '', body: '' });
 
   useEffect(() => {
     fetchOverview();
@@ -64,10 +66,29 @@ const Dashboard = () => {
   };
 
   const generateToken = async () => {
+    // Check if there are any deadlines
+    if (deadlines.length === 0) {
+      setErrorMessage({
+        title: 'No Deadline Found',
+        body: 'You need to create a deadline first before generating a submission link. Deadlines help track and organize student submissions effectively.'
+      });
+      setShowErrorModal(true);
+      return;
+    }
+
+    // Check if a deadline is selected
+    if (!selectedDeadline) {
+      setErrorMessage({
+        title: 'No Deadline Selected',
+        body: 'Please select a deadline from the dropdown before generating a submission link. This helps students know which deadline their submission is for.'
+      });
+      setShowErrorModal(true);
+      return;
+    }
+
     try {
       setTokenLoading(true);
-      const deadlineId = selectedDeadline || null;
-      const response = await authAPI.generateSubmissionToken(deadlineId);
+      const response = await authAPI.generateSubmissionToken(selectedDeadline);
       setSubmissionToken(response.data.token);
     } catch (err) {
       console.error('Failed to generate token:', err);
@@ -102,34 +123,17 @@ const Dashboard = () => {
       <div className="dashboard-error">
         <AlertCircle size={48} />
         <h3>{error}</h3>
-        <button className="btn btn-primary" onClick={fetchOverview}>
-          Retry
-        </button>
       </div>
     );
   }
 
   const stats = [
     {
-      label: 'Total Submissions',
+      label: 'Total SPPs',
       value: overview?.total_submissions || 0,
       icon: FileText,
       color: 'maroon',
-      change: '+12%',
-    },
-    {
-      label: 'Pending Analysis',
-      value: overview?.pending_submissions || 0,
-      icon: Clock,
-      color: 'gold',
       change: null,
-    },
-    {
-      label: 'Completed',
-      value: overview?.completed_submissions || 0,
-      icon: CheckCircle,
-      color: 'success',
-      change: '+8%',
     },
     {
       label: 'Active Deadlines',
@@ -146,7 +150,7 @@ const Dashboard = () => {
         <div>
           <h1>Dashboard Overview</h1>
           <p className="dashboard-subtitle">
-            Welcome back! Monitor student submissions and track deadlines.
+            Welcome back! Monitor student SPP submissions and track deadlines.
           </p>
         </div>
       </div>
@@ -234,7 +238,7 @@ const Dashboard = () => {
       {/* Recent Submissions */}
       <div className="dashboard-section">
         <div className="section-header">
-          <h2>Recent Submissions</h2>
+          <h2>Recent SPP Submissions</h2>
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => navigate('/dashboard/submissions')}
@@ -261,8 +265,10 @@ const Dashboard = () => {
                   <div className="submission-details">
                     <h4>{submission.original_filename}</h4>
                     <p className="submission-meta">
-                      {submission.student_name || 'Unknown Student'} •{' '}
-                      {new Date(submission.created_at).toLocaleDateString()}
+                      Student ID: {submission.student_id || 'N/A'}
+                    </p>
+                    <p className="submission-meta">
+                      Date: {new Date(submission.created_at).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="submission-status">
@@ -276,8 +282,8 @@ const Dashboard = () => {
           ) : (
             <div className="empty-state">
               <FileText size={48} />
-              <h3>No submissions yet</h3>
-              <p>Waiting for students to submit their documents</p>
+              <h3>No SPP submissions yet</h3>
+              <p>Waiting for students to submit their Software Project Proposals</p>
             </div>
           )}
         </div>
@@ -334,6 +340,48 @@ const Dashboard = () => {
           )}
         </div>
       </div>
+
+      {/* Error Modal */}
+      {showErrorModal && (
+        <div className="modal-overlay" onClick={() => setShowErrorModal(false)}>
+          <div className="modal-content error-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="error-icon">
+                <AlertCircle size={48} />
+              </div>
+              <h2>{errorMessage.title}</h2>
+            </div>
+            
+            <div className="modal-body">
+              <p>{errorMessage.body}</p>
+            </div>
+
+            <div className="modal-footer">
+              {errorMessage.title === 'No Deadline Found' ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setShowErrorModal(false);
+                    navigate('/dashboard/deadlines');
+                  }}
+                >
+                  <Calendar size={18} />
+                  Go to Deadline Management
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setShowErrorModal(false)}
+                >
+                  OK
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

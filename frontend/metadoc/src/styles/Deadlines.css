@@ -10,6 +10,12 @@
   margin-bottom: var(--spacing-xl);
 }
 
+.deadlines-header .btn {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  max-width: 200px;
+}
+
 .deadlines-header h1 {
   margin-bottom: var(--spacing-sm);
 }
@@ -241,6 +247,48 @@
   padding: var(--spacing-xl);
 }
 
+.form-group {
+  margin-bottom: var(--spacing-lg);
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: var(--spacing-sm);
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--color-gray-700);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-family: inherit;
+  color: var(--color-gray-900);
+  background-color: var(--color-white);
+  transition: all 0.2s;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--color-maroon);
+  box-shadow: 0 0 0 3px rgba(128, 0, 32, 0.1);
+}
+
+.form-control::placeholder {
+  color: var(--color-gray-400);
+}
+
+textarea.form-control {
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.5;
+}
+
 .modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -248,6 +296,11 @@
   padding-top: var(--spacing-lg);
   border-top: 1px solid var(--color-gray-200);
   margin-top: var(--spacing-lg);
+}
+
+.modal-footer .btn {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
 }
 
 /* Empty State */
@@ -278,14 +331,117 @@
   margin-bottom: var(--spacing-lg);
 }
 
+.empty-state .btn {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  max-width: 200px;
+}
+
+/* Delete Modal - Compact */
+.delete-modal {
+  max-width: 400px;
+}
+
+.delete-modal .modal-header {
+  flex-direction: row;
+  align-items: center;
+  text-align: left;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-gray-200);
+  gap: var(--spacing-sm);
+}
+
+.delete-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.delete-icon svg {
+  color: var(--color-error);
+}
+
+.delete-modal .modal-header h2 {
+  color: var(--color-error);
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.delete-modal .modal-body {
+  padding: var(--spacing-md) var(--spacing-lg);
+  text-align: left;
+}
+
+.delete-modal .modal-body p {
+  color: var(--color-gray-700);
+  line-height: 1.5;
+  margin-bottom: var(--spacing-xs);
+  font-size: 0.875rem;
+}
+
+.delete-modal .modal-body p:last-child {
+  margin-bottom: 0;
+}
+
+.warning-text {
+  color: var(--color-error) !important;
+  font-weight: 500;
+}
+
+.delete-modal .modal-footer {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--color-gray-200);
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+.delete-modal .modal-footer .btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}
+
+.btn-danger {
+  background-color: var(--color-error);
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.btn-danger:hover {
+  background-color: #dc2626;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .deadlines-header {
     flex-direction: column;
-    gap: var(--spacing-lg);
+    align-items: flex-start;
+    gap: var(--spacing-md);
   }
 
   .deadlines-grid {
     grid-template-columns: 1fr;
+  }
+
+  .deadline-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+  }
+
+  .delete-modal .modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .delete-modal .modal-footer .btn {
+    width: 100%;
   }
 }

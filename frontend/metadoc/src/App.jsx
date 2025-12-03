@@ -5,7 +5,7 @@ import Login from './pages/Login';
 import OAuthCallback from './pages/OAuthCallback';
 import SubmitDocument from './pages/SubmitDocument';
 import Dashboard from './pages/Dashboard';
-import Submissions from './pages/Submissions';
+import Files from './pages/Files';
 import SubmissionDetail from './pages/SubmissionDetail';
 import Deadlines from './pages/Deadlines';
 import './App.css';
@@ -70,11 +70,21 @@ function App() {
             }
           />
           <Route
+            path="/dashboard/Files"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <Files />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/dashboard/submissions"
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <Submissions />
+                  <Files />
                 </DashboardLayout>
               </ProtectedRoute>
             }

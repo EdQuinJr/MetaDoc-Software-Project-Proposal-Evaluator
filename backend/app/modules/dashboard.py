@@ -74,7 +74,22 @@ class DashboardService:
                 AnalysisResult.processing_duration_seconds.isnot(None)
             ).scalar()
             
+            # Get upcoming deadlines (only 3 nearest)
+            upcoming_deadlines = Deadline.query.filter_by(
+                professor_id=user_id
+            ).filter(
+                Deadline.deadline_datetime > datetime.utcnow()
+            ).order_by(Deadline.deadline_datetime.asc()).limit(3).all()
+            
             return {
+                'total_submissions': total_submissions,
+                'pending_submissions': pending_submissions,
+                'completed_submissions': completed_submissions,
+                'failed_submissions': failed_submissions,
+                'active_deadlines': active_deadlines,
+                'completion_rate': round((completed_submissions / max(total_submissions, 1)) * 100, 1),
+                'average_processing_time_seconds': round(avg_processing_time or 0, 2),
+                
                 'submission_statistics': {
                     'total': total_submissions,
                     'pending': pending_submissions,
@@ -93,12 +108,20 @@ class DashboardService:
                     {
                         'id': s.id,
                         'job_id': s.job_id,
-                        'filename': s.original_filename,
-                        'student_name': s.student_name,
+                        'original_filename': s.original_filename,
+                        'student_id': s.student_id,
                         'status': s.status.value,
                         'created_at': s.created_at.isoformat(),
-                        'file_size_mb': round(s.file_size / (1024 * 1024), 2)
+                        'file_size': s.file_size
                     } for s in recent_submissions
+                ],
+                'upcoming_deadlines': [
+                    {
+                        'id': d.id,
+                        'title': d.title,
+                        'deadline_datetime': d.deadline_datetime.isoformat(),
+                        'submission_count': len([s for s in d.submissions if s.professor_id == user_id])
+                    } for d in upcoming_deadlines
                 ]
             }
             
@@ -167,9 +190,9 @@ class DashboardService:
                 if filters.get('deadline_id'):
                     query = query.filter(Submission.deadline_id == filters['deadline_id'])
                 
-                if filters.get('student_name'):
+                if filters.get('student_id'):
                     query = query.filter(
-                        Submission.student_name.ilike(f"%{filters['student_name']}%")
+                        Submission.student_id.ilike(f"%{filters['student_id']}%")
                     )
                 
                 if filters.get('date_from'):
@@ -193,8 +216,8 @@ class DashboardService:
                 query = query.order_by(desc(Submission.created_at) if sort_order == 'desc' else asc(Submission.created_at))
             elif sort_by == 'filename':
                 query = query.order_by(desc(Submission.original_filename) if sort_order == 'desc' else asc(Submission.original_filename))
-            elif sort_by == 'student_name':
-                query = query.order_by(desc(Submission.student_name) if sort_order == 'desc' else asc(Submission.student_name))
+            elif sort_by == 'student_id':
+                query = query.order_by(desc(Submission.student_id) if sort_order == 'desc' else asc(Submission.student_id))
             elif sort_by == 'file_size':
                 query = query.order_by(desc(Submission.file_size) if sort_order == 'desc' else asc(Submission.file_size))
             
@@ -441,7 +464,7 @@ class DashboardService:
                 metadata={
                     'submission_id': submission_id,
                     'filename': submission.original_filename,
-                    'student_name': submission.student_name
+                    'student_id': submission.student_id
                 }
             )
             
@@ -598,8 +621,8 @@ def get_submissions():
             filters['status'] = request.args.get('status')
         if request.args.get('deadline_id'):
             filters['deadline_id'] = request.args.get('deadline_id')
-        if request.args.get('student_name'):
-            filters['student_name'] = request.args.get('student_name')
+        if request.args.get('student_id'):
+            filters['student_id'] = request.args.get('student_id')
         if request.args.get('date_from'):
             filters['date_from'] = request.args.get('date_from')
         if request.args.get('date_to'):

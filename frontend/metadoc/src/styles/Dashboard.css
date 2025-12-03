@@ -566,6 +566,68 @@
   margin-bottom: var(--spacing-lg);
 }
 
+/* Error Modal - Compact */
+.error-modal {
+  max-width: 400px;
+}
+
+.error-modal .modal-header {
+  flex-direction: row;
+  align-items: center;
+  text-align: left;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-gray-200);
+  gap: var(--spacing-sm);
+}
+
+.error-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.error-icon svg {
+  color: var(--color-error);
+  width: 20px;
+  height: 20px;
+}
+
+.error-modal .modal-header h2 {
+  color: var(--color-error);
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.error-modal .modal-body {
+  padding: var(--spacing-md) var(--spacing-lg);
+  text-align: left;
+}
+
+.error-modal .modal-body p {
+  color: var(--color-gray-700);
+  line-height: 1.5;
+  margin-bottom: 0;
+  font-size: 0.875rem;
+}
+
+.error-modal .modal-footer {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--color-gray-200);
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+.error-modal .modal-footer .btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .dashboard-header {
@@ -586,6 +648,14 @@
 
   .submission-status,
   .deadline-time {
+    width: 100%;
+  }
+
+  .error-modal .modal-footer {
+    flex-direction: column;
+  }
+
+  .error-modal .modal-footer .btn {
     width: 100%;
   }
 }

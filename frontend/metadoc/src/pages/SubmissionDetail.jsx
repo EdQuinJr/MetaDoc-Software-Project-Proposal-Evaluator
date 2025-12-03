@@ -13,7 +13,7 @@ import {
   CheckCircle,
   TrendingUp,
 } from 'lucide-react';
-import './SubmissionDetail.css';
+import '../styles/SubmissionDetail.css';
 
 const SubmissionDetail = () => {
   const { id } = useParams();
@@ -54,7 +54,7 @@ const SubmissionDetail = () => {
         <AlertCircle size={48} />
         <h3>{error || 'Submission not found'}</h3>
         <button className="btn btn-primary" onClick={() => navigate('/dashboard/submissions')}>
-          Back to Submissions
+          Back to SPP Files
         </button>
       </div>
     );
@@ -66,7 +66,7 @@ const SubmissionDetail = () => {
     <div className="detail-page">
       <button className="btn btn-ghost mb-lg" onClick={() => navigate('/dashboard/submissions')}>
         <ArrowLeft size={20} />
-        Back to Submissions
+        Back to SPP Files
       </button>
 
       <div className="detail-header">
@@ -89,12 +89,8 @@ const SubmissionDetail = () => {
           </div>
           <div className="info-grid">
             <div className="info-item">
-              <span className="info-label">Student Name</span>
-              <span className="info-value">{submission.student_name || 'Not provided'}</span>
-            </div>
-            <div className="info-item">
-              <span className="info-label">Student Email</span>
-              <span className="info-value">{submission.student_email || 'Not provided'}</span>
+              <span className="info-label">Student ID</span>
+              <span className="info-value">{submission.student_id || 'Not provided'}</span>
             </div>
             <div className="info-item">
               <span className="info-label">Submission Date</span>
@@ -186,6 +182,61 @@ const SubmissionDetail = () => {
                 <span className="info-value">
                   {analysis.document_metadata.last_editor || 'Unavailable'}
                 </span>
+              </div>
+            </div>
+            
+            {/* Group Members / Contributors */}
+            <div className="card-section">
+              <h4 className="section-subtitle">
+                <User size={16} />
+                Group Members / Contributors
+              </h4>
+              <div className="contributors-list">
+                {(() => {
+                  const contributors = [];
+                  
+                  // Add author with creation date
+                  if (analysis.document_metadata.author) {
+                    contributors.push({
+                      name: analysis.document_metadata.author,
+                      role: 'Author',
+                      date: analysis.document_metadata.creation_date,
+                    });
+                  }
+                  
+                  // Add last editor with modification date (if different from author)
+                  if (analysis.document_metadata.last_editor && 
+                      analysis.document_metadata.last_editor !== analysis.document_metadata.author) {
+                    contributors.push({
+                      name: analysis.document_metadata.last_editor,
+                      role: 'Editor',
+                      date: analysis.document_metadata.last_modified_date,
+                    });
+                  }
+                  
+                  return contributors.length > 0 ? (
+                    contributors.map((contributor, index) => (
+                      <div key={index} className="contributor-item">
+                        <div className="contributor-icon">
+                          <User size={14} />
+                        </div>
+                        <div className="contributor-details">
+                          <div className="contributor-name">
+                            <strong>{contributor.name}</strong>
+                            <span className="contributor-role">({contributor.role})</span>
+                          </div>
+                          {contributor.date && (
+                            <div className="contributor-date">
+                              {new Date(contributor.date).toLocaleString()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted">No contributor information available</p>
+                  );
+                })()}
               </div>
             </div>
           </div>

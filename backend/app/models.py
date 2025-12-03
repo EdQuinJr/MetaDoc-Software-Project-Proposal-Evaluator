@@ -89,8 +89,7 @@ class Submission(BaseModel):
     # Submission details
     submission_type = db.Column(db.String(50), nullable=False)  # 'upload' or 'drive_link'
     google_drive_link = db.Column(db.String(500), nullable=True)
-    student_name = db.Column(db.String(255), nullable=True)
-    student_email = db.Column(db.String(255), nullable=True)
+    student_id = db.Column(db.String(50), nullable=True)
     
     # Processing status
     status = db.Column(db.Enum(SubmissionStatus), default=SubmissionStatus.PENDING, nullable=False)
@@ -106,6 +105,37 @@ class Submission(BaseModel):
     analysis_result = db.relationship('AnalysisResult', backref='submission', uselist=False, lazy=True)
     audit_logs = db.relationship('AuditLog', backref='submission', lazy=True)
     
+    @property
+    def is_late(self):
+        """Check if submission was made after the deadline"""
+        try:
+            if not self.deadline_id:
+                return False
+            # Use a query to avoid lazy loading issues
+            from app.models import Deadline
+            deadline = Deadline.query.filter_by(id=self.deadline_id).first()
+            if not deadline:
+                return False
+            return self.created_at > deadline.deadline_datetime
+        except Exception as e:
+            return False
+    
+    @property
+    def last_modified(self):
+        """Return the last modification time (updated_at or created_at)"""
+        return self.updated_at if self.updated_at else self.created_at
+    
+    @property
+    def analysis_summary(self):
+        """Return a summary of the analysis results"""
+        if not self.analysis_result:
+            return None
+        return {
+            'word_count': self.analysis_result.content_statistics.get('word_count') if self.analysis_result.content_statistics else None,
+            'readability_score': self.analysis_result.flesch_kincaid_score,
+            'is_complete': self.analysis_result.is_complete_document
+        }
+    
     def __repr__(self):
         return f'<Submission {self.job_id}>'
     
@@ -118,10 +148,11 @@ class Submission(BaseModel):
             'file_size': self.file_size,
             'mime_type': self.mime_type,
             'submission_type': self.submission_type,
-            'student_name': self.student_name,
-            'student_email': self.student_email,
+            'student_id': self.student_id,
             'status': self.status.value,
-            'is_late': getattr(self, 'is_late', False),  # Safe access - returns False if column doesn't exist
+            'is_late': self.is_late,
+            'last_modified': self.last_modified.isoformat() if self.last_modified else None,
+            'analysis_summary': self.analysis_summary,
             'created_at': self.created_at.isoformat(),
             'processing_started_at': self.processing_started_at.isoformat() if self.processing_started_at else None,
             'processing_completed_at': self.processing_completed_at.isoformat() if self.processing_completed_at else None,
@@ -137,7 +168,7 @@ class AnalysisResult(BaseModel):
     # Module 2: Metadata and Content Analysis
     document_metadata = db.Column(JSON, nullable=True)  # Author, timestamps, etc.
     content_statistics = db.Column(JSON, nullable=True)  # Word count, sentences, pages
-    document_text = db.Column(Text, nullable=True)  # Full extracted text
+    document_text = db.Column(db.Text(length=4294967295), nullable=True)  # Full extracted text (LONGTEXT)
     
     # Module 3: Rule-based Insights
     heuristic_insights = db.Column(JSON, nullable=True)  # Timeliness, contribution analysis

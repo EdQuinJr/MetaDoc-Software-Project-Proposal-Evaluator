@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { submissionAPI } from '../services/api';
 import { Upload, Link as LinkIcon, FileText, CheckCircle, AlertCircle, Loader } from 'lucide-react';
-import './SubmitDocument.css';
+import '../styles/SubmitDocument.css';
 
 const SubmitDocument = () => {
   const [activeTab, setActiveTab] = useState('upload'); // 'upload' or 'drive'
@@ -12,15 +12,13 @@ const SubmitDocument = () => {
   // Upload form state
   const [file, setFile] = useState(null);
   const [uploadData, setUploadData] = useState({
-    student_name: '',
-    student_email: '',
+    student_id: '',
   });
 
   // Drive link form state
   const [driveData, setDriveData] = useState({
     drive_link: '',
-    student_name: '',
-    student_email: '',
+    student_id: '',
   });
 
   const [linkValidation, setLinkValidation] = useState(null);
@@ -75,21 +73,34 @@ const SubmitDocument = () => {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('student_name', uploadData.student_name);
-      formData.append('student_email', uploadData.student_email);
+      formData.append('student_id', uploadData.student_id);
       formData.append('token', token);
 
       const response = await submissionAPI.uploadFile(formData);
       setSuccess({
-        message: 'File uploaded successfully!',
+        message: '✅ Document uploaded and analysis started successfully!',
         jobId: response.data.job_id,
       });
       
       // Reset form
       setFile(null);
-      setUploadData({ student_name: '', student_email: '' });
+      setUploadData({ student_id: '' });
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to upload file');
+      const errorMessage = err.response?.data?.error || 'Failed to upload file';
+      
+      // Check for specific error types
+      if (errorMessage.includes('empty') || errorMessage.includes('insufficient content')) {
+        setError('❌ Document is empty or has insufficient content. Please upload a valid document with text.');
+      } else if (errorMessage.includes('Invalid document') || errorMessage.includes('corrupted')) {
+        setError('❌ Document is invalid or corrupted. Please check your file and try again.');
+      } else if (errorMessage.includes('Cannot read document')) {
+        setError('❌ Cannot read document. The file may be password-protected or corrupted.');
+      } else {
+        setError(`❌ ${errorMessage}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -149,22 +160,36 @@ const SubmitDocument = () => {
       
       const response = await submissionAPI.submitDriveLink(submissionData);
       setSuccess({
-        message: 'Google Drive file retrieved successfully!',
+        message: '✅ Google Drive document retrieved and analysis started successfully!',
         jobId: response.data.job_id,
       });
       
       // Reset form
-      setDriveData({ drive_link: '', student_name: '', student_email: '' });
+      setDriveData({ drive_link: '', student_id: '' });
       setLinkValidation(null);
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       const errorData = err.response?.data;
       if (errorData?.error_type === 'permission_denied') {
         setError({
-          message: errorData.error,
+          message: `❌ ${errorData.error}`,
           guidance: errorData.guidance,
         });
       } else {
-        setError(errorData?.error || 'Failed to submit Google Drive link');
+        const errorMessage = errorData?.error || 'Failed to submit Google Drive link';
+        
+        // Check for specific error types
+        if (errorMessage.includes('empty') || errorMessage.includes('insufficient content')) {
+          setError('❌ Document is empty or has insufficient content. Please provide a valid document with text.');
+        } else if (errorMessage.includes('Invalid document') || errorMessage.includes('corrupted')) {
+          setError('❌ Document is invalid or corrupted. Please check your file and try again.');
+        } else if (errorMessage.includes('Cannot read document')) {
+          setError('❌ Cannot read document. The file may be password-protected or corrupted.');
+        } else {
+          setError(`❌ ${errorMessage}`);
+        }
       }
     } finally {
       setLoading(false);
@@ -173,14 +198,6 @@ const SubmitDocument = () => {
 
   return (
     <div className="submit-page">
-      <div className="submit-page-header">
-        <div className="branding">
-          <FileText size={32} className="brand-icon" />
-          <h1 className="brand-name">MetaDoc</h1>
-        </div>
-        <p className="page-subtitle">Student Document Submission Portal</p>
-      </div>
-
       <div className="submit-container">
         <div className="submit-header">
           <h2>Submit Your Document</h2>
@@ -261,28 +278,15 @@ const SubmitDocument = () => {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Student Name</label>
+                <label className="form-label">Student ID Number</label>
                 <input
                   type="text"
                   className="form-input"
-                  value={uploadData.student_name}
+                  value={uploadData.student_id}
                   onChange={(e) =>
-                    setUploadData({ ...uploadData, student_name: e.target.value })
+                    setUploadData({ ...uploadData, student_id: e.target.value })
                   }
-                  placeholder="Enter student name"
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Student Email</label>
-                <input
-                  type="email"
-                  className="form-input"
-                  value={uploadData.student_email}
-                  onChange={(e) =>
-                    setUploadData({ ...uploadData, student_email: e.target.value })
-                  }
-                  placeholder="student@example.com"
+                  placeholder="e.g., 22-1686-452"
                 />
               </div>
 
@@ -374,28 +378,15 @@ const SubmitDocument = () => {
               )}
 
               <div className="form-group">
-                <label className="form-label">Student Name</label>
+                <label className="form-label">Student ID Number</label>
                 <input
                   type="text"
                   className="form-input"
-                  value={driveData.student_name}
+                  value={driveData.student_id}
                   onChange={(e) =>
-                    setDriveData({ ...driveData, student_name: e.target.value })
+                    setDriveData({ ...driveData, student_id: e.target.value })
                   }
-                  placeholder="Enter student name"
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Student Email</label>
-                <input
-                  type="email"
-                  className="form-input"
-                  value={driveData.student_email}
-                  onChange={(e) =>
-                    setDriveData({ ...driveData, student_email: e.target.value })
-                  }
-                  placeholder="student@example.com"
+                  placeholder="e.g., 22-1686-452"
                 />
               </div>
 

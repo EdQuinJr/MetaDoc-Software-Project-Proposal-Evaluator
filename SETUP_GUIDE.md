@@ -5,10 +5,48 @@ Complete setup instructions for the MetaDoc application (Frontend + Backend).
 ## Prerequisites
 
 - **Python 3.10+** (for backend)
-- **Node.js 18+** and npm (for frontend)
-- **MySQL or PostgreSQL** (for database)
+- **Node.js 18+** and npm (for frontend)  
+- **MySQL or PostgreSQL** (for database) - *SQLite works for development*
 - **Google Cloud Project** with OAuth 2.0 credentials
 - **Google Service Account** for Drive API access
+
+## 🔑 Google OAuth2 Setup (Critical Step)
+
+### Step 1: Create Google Cloud Project
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create new project: `metadoc-project`
+3. Note your Project ID
+
+### Step 2: Enable APIs
+
+Enable these APIs in "APIs & Services" → "Library":
+- **Google Drive API**
+- **Google+ API** (OAuth2)
+- **Google Identity Services API**
+
+### Step 3: Create OAuth 2.0 Credentials
+
+1. Go to "APIs & Services" → "Credentials"
+2. Click "Create Credentials" → "OAuth 2.0 Client ID"
+3. Choose "Web application"
+4. **Add these Authorized redirect URIs**:
+   ```
+   http://localhost:5000/auth/google/callback
+   http://127.0.0.1:5000/auth/google/callback
+   ```
+5. Copy Client ID and Client Secret
+
+### Step 4: Configure OAuth Consent Screen
+
+1. Go to "OAuth consent screen"
+2. Choose "Internal" or "External"
+3. Fill required fields:
+   - App name: `MetaDoc`
+   - User support email: Your email
+4. For testing, add test users if using External
+
+**⚠️ Common OAuth Error**: If you get `redirect_uri_mismatch`, double-check the redirect URI in Google Console matches exactly: `http://localhost:5000/auth/google/callback`
 
 ---
 

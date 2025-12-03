@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { dashboardAPI } from '../services/api';
-import { Calendar, Plus, Trash2, Edit2, AlertCircle, CheckCircle } from 'lucide-react';
-import './Deadlines.css';
+import { Calendar, Plus, Trash2, Edit2, AlertCircle, CheckCircle, AlertTriangle, X } from 'lucide-react';
+import '../styles/Deadlines.css';
 
 const Deadlines = () => {
   const [deadlines, setDeadlines] = useState([]);
@@ -9,6 +9,8 @@ const Deadlines = () => {
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editingDeadline, setEditingDeadline] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -74,16 +76,28 @@ const Deadlines = () => {
     setShowModal(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this deadline?')) return;
+  const handleDeleteClick = (deadline) => {
+    setDeleteTarget(deadline);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
     
     try {
-      await dashboardAPI.deleteDeadline(id);
-      fetchDeadlines();
+      await dashboardAPI.deleteDeadline(deleteTarget.id);
+      setDeadlines(deadlines.filter(d => d.id !== deleteTarget.id));
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
     } catch (err) {
       console.error('Failed to delete deadline:', err);
-      alert('Failed to delete deadline. Please try again.');
+      setError('Failed to delete deadline');
     }
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteModal(false);
+    setDeleteTarget(null);
   };
 
   const handleNewDeadline = () => {
@@ -139,11 +153,7 @@ const Deadlines = () => {
         <div className="empty-state">
           <Calendar size={64} />
           <h3>No deadlines yet</h3>
-          <p>Create your first deadline to start tracking submissions</p>
-          <button className="btn btn-primary mt-lg" onClick={handleNewDeadline}>
-            <Plus size={20} />
-            Create Deadline
-          </button>
+          <p>Create your first deadline to start tracking SPP submissions</p>
         </div>
       ) : (
         <div className="deadlines-grid">
@@ -165,7 +175,7 @@ const Deadlines = () => {
                     </button>
                     <button
                       className="btn-icon btn-icon-danger"
-                      onClick={() => handleDelete(deadline.id)}
+                      onClick={() => handleDeleteClick(deadline)}
                       title="Delete"
                     >
                       <Trash2 size={18} />
@@ -186,13 +196,6 @@ const Deadlines = () => {
                     </div>
                     <div className={`deadline-status status-${timeInfo.color}`}>
                       {timeInfo.text}
-                    </div>
-                  </div>
-                  
-                  <div className="deadline-stats">
-                    <div className="stat-item">
-                      <span className="stat-value">{deadline.submission_count || 0}</span>
-                      <span className="stat-label">Submissions</span>
                     </div>
                   </div>
                 </div>
@@ -252,18 +255,40 @@ const Deadlines = () => {
               </div>
 
               <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowModal(false)}
-                >
-                  Cancel
-                </button>
                 <button type="submit" className="btn btn-primary">
                   {editingDeadline ? 'Update' : 'Create'} Deadline
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && deleteTarget && (
+        <div className="modal-overlay" onClick={handleDeleteCancel}>
+          <div className="modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="delete-icon">
+                <AlertTriangle size={20} />
+              </div>
+              <h2>Delete Deadline</h2>
+            </div>
+            
+            <div className="modal-body">
+              <p>Are you sure you want to delete <strong>"{deleteTarget.title}"</strong>?</p>
+              <p className="warning-text">This action cannot be undone.</p>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={handleDeleteCancel}>
+                Cancel
+              </button>
+              <button className="btn btn-danger" onClick={handleDeleteConfirm}>
+                <Trash2 size={16} />
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
