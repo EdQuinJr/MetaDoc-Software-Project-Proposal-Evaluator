@@ -343,6 +343,11 @@ class DashboardService:
             # Parse deadline datetime
             deadline_datetime = datetime.fromisoformat(deadline_data['deadline_datetime'])
             
+            # Validate deadline is not in the past
+            current_datetime = datetime.utcnow()
+            if deadline_datetime <= current_datetime:
+                return None, "Deadline cannot be set to a past date or current time. Please select a future date and time."
+            
             # Create deadline
             deadline = Deadline(
                 title=deadline_data['title'],
@@ -386,6 +391,13 @@ class DashboardService:
             
             if not deadline:
                 return None, "Deadline not found or access denied"
+            
+            # Validate deadline datetime if being updated
+            if 'deadline_datetime' in update_data:
+                new_deadline_datetime = datetime.fromisoformat(update_data['deadline_datetime'])
+                current_datetime = datetime.utcnow()
+                if new_deadline_datetime <= current_datetime:
+                    return None, "Deadline cannot be set to a past date or current time. Please select a future date and time."
             
             # Update fields
             if 'title' in update_data:

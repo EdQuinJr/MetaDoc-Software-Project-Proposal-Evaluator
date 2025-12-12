@@ -317,12 +317,14 @@ const Files = () => {
                     <div className="preview-metadata">
                       <h4>Document Metadata:</h4>
                       <div className="metadata-grid">
-                        {Object.entries(previewSubmission.analysis_result.document_metadata).map(([key, value]) => (
-                          <div key={key} className="metadata-item">
-                            <span className="metadata-label">{key}:</span>
-                            <span className="metadata-value">{String(value)}</span>
-                          </div>
-                        ))}
+                        {Object.entries(previewSubmission.analysis_result.document_metadata)
+                          .filter(([key]) => key.toLowerCase() !== 'word_count' && key.toLowerCase() !== 'wordcount')
+                          .map(([key, value]) => (
+                            <div key={key} className="metadata-item">
+                              <span className="metadata-label">{key}:</span>
+                              <span className="metadata-value">{String(value)}</span>
+                            </div>
+                          ))}
                       </div>
                     </div>
                   )}
@@ -335,9 +337,6 @@ const Files = () => {
             </div>
 
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={closePreviewModal}>
-                Close
-              </button>
               <button 
                 className="btn btn-primary" 
                 onClick={() => {

@@ -339,6 +339,12 @@
   padding: var(--spacing-xl);
   max-height: 70vh;
   overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.preview-modal .modal-body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .preview-header h3 {
@@ -383,8 +389,6 @@
   border: 1px solid var(--color-gray-200);
   border-radius: var(--radius-md);
   padding: var(--spacing-lg);
-  max-height: 400px;
-  overflow-y: auto;
   white-space: pre-wrap;
   font-family: var(--font-sans);
   font-size: 0.9rem;

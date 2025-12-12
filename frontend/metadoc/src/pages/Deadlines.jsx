@@ -17,6 +17,7 @@ const Deadlines = () => {
     description: '',
     deadline_datetime: '',
   });
+  const [formError, setFormError] = useState(null);
 
   useEffect(() => {
     fetchDeadlines();
@@ -37,6 +38,17 @@ const Deadlines = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormError(null);
+    
+    // Validate deadline is not in the past
+    const selectedDate = new Date(formData.deadline_datetime);
+    const now = new Date();
+    
+    if (selectedDate <= now) {
+      setFormError('Deadline cannot be set to a past date or current time. Please select a future date and time.');
+      return;
+    }
+    
     try {
       if (editingDeadline) {
         // Update existing deadline
@@ -49,10 +61,12 @@ const Deadlines = () => {
       setShowModal(false);
       setFormData({ title: '', description: '', deadline_datetime: '' });
       setEditingDeadline(null);
+      setFormError(null);
       fetchDeadlines();
     } catch (err) {
       console.error('Failed to save deadline:', err);
-      alert('Failed to save deadline. Please try again.');
+      const errorMessage = err.response?.data?.error || 'Failed to save deadline. Please try again.';
+      setFormError(errorMessage);
     }
   };
 
@@ -73,6 +87,7 @@ const Deadlines = () => {
       description: deadline.description || '',
       deadline_datetime: formattedDateTime,
     });
+    setFormError(null);
     setShowModal(true);
   };
 
@@ -103,6 +118,7 @@ const Deadlines = () => {
   const handleNewDeadline = () => {
     setEditingDeadline(null);
     setFormData({ title: '', description: '', deadline_datetime: '' });
+    setFormError(null);
     setShowModal(true);
   };
 
@@ -217,6 +233,13 @@ const Deadlines = () => {
             </div>
             
             <form onSubmit={handleSubmit}>
+              {formError && (
+                <div className="alert alert-error">
+                  <AlertCircle size={20} />
+                  <span>{formError}</span>
+                </div>
+              )}
+              
               <div className="form-group">
                 <label htmlFor="title">Title *</label>
                 <input
@@ -252,6 +275,7 @@ const Deadlines = () => {
                   onChange={(e) => setFormData({ ...formData, deadline_datetime: e.target.value })}
                   required
                 />
+                <small className="form-text">Select a future date and time</small>
               </div>
 
               <div className="modal-footer">
