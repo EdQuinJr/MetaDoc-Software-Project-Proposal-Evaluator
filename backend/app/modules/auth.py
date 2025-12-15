@@ -524,6 +524,10 @@ def generate_submission_token():
             deadline = Deadline.query.filter_by(id=deadline_id, professor_id=user.id).first()
             if not deadline:
                 return jsonify({'error': 'Invalid deadline or access denied'}), 404
+            
+            # Check if deadline is in the past
+            if deadline.deadline_datetime < datetime.utcnow():
+                return jsonify({'error': 'Cannot generate submission link: The selected deadline is past or outdated.'}), 400
         
         # Generate submission token (valid for 30 days)
         submission_token = secrets.token_urlsafe(32)
