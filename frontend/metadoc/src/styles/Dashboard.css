@@ -602,6 +602,27 @@
   margin: 0;
   font-size: 1.125rem;
   font-weight: 600;
+  flex: 1;
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: var(--color-gray-400);
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  transition: all 0.2s;
+}
+
+.btn-close:hover {
+  background: var(--color-gray-100);
+  color: var(--color-gray-600);
 }
 
 .error-modal .modal-body {

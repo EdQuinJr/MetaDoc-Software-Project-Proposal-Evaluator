@@ -120,9 +120,40 @@ class MetadataExtractionService:
                                 metadata['creation_date'] = elem.text
                             elif elem.tag.endswith('modified') and not metadata['last_modified_date']:
                                 metadata['last_modified_date'] = elem.text
+                            elif elem.tag.endswith('lastModifiedBy') and metadata['last_editor'] == 'Unavailable':
+                                metadata['last_editor'] = elem.text
+                                
+                        current_app.logger.info(f"Manual XML Extraction - Creator: {metadata.get('author')}, LastEditor: {metadata.get('last_editor')}")
             
             except Exception as e:
                 current_app.logger.warning(f"Could not extract extended metadata: {e}")
+            
+            # Fallback: If last_editor is still Unavailable, use author if available
+            if metadata['last_editor'] == 'Unavailable' and metadata['author'] != 'Unavailable':
+                metadata['last_editor'] = metadata['author']
+            
+            # If last_editor is 'python-docx', set to Unavailable (if author fallback didn't help)
+            if 'python-docx' in metadata['last_editor']:
+                metadata['last_editor'] = 'Unavailable'
+            
+            # Initialize contributors list for standard uploads
+            metadata['contributors'] = []
+            if metadata.get('author') and metadata['author'] != 'Unavailable':
+                metadata['contributors'].append({
+                    'name': metadata['author'], 
+                    'role': 'Owner and Writer',
+                    'date': metadata.get('creation_date')
+                })
+            
+            if metadata.get('last_editor') and metadata['last_editor'] != 'Unavailable':
+                # Avoid duplicates
+                if not metadata['contributors'] or metadata['contributors'][0]['name'] != metadata['last_editor']:
+                    metadata['contributors'].append({
+                        'name': metadata['last_editor'], 
+                        'role': 'Last Editor',
+                        'date': metadata.get('last_modified_date')
+                    })
+            
             
             return metadata, None
             

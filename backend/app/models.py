@@ -90,6 +90,7 @@ class Submission(BaseModel):
     submission_type = db.Column(db.String(50), nullable=False)  # 'upload' or 'drive_link'
     google_drive_link = db.Column(db.String(500), nullable=True)
     student_id = db.Column(db.String(50), nullable=True)
+    student_name = db.Column(db.String(255), nullable=True)
     
     # Processing status
     status = db.Column(db.Enum(SubmissionStatus), default=SubmissionStatus.PENDING, nullable=False)
@@ -149,6 +150,7 @@ class Submission(BaseModel):
             'mime_type': self.mime_type,
             'submission_type': self.submission_type,
             'student_id': self.student_id,
+            'student_name': self.student_name,
             'status': self.status.value,
             'is_late': self.is_late,
             'last_modified': self.last_modified.isoformat() if self.last_modified else None,
@@ -357,11 +359,10 @@ class SubmissionToken(BaseModel):
     usage_count = db.Column(db.Integer, default=0)
     max_usage = db.Column(db.Integer, nullable=True)  # Optional usage limit
     
-    # Relationship
     professor = db.relationship('User', backref='submission_tokens')
     
-    # Note: deadline_id column may exist in database but not defined here
-    # to avoid errors if column doesn't exist. Access via getattr()
+    # Linked deadline
+    deadline_id = db.Column(db.String(36), nullable=True)
     
     def __repr__(self):
         return f'<SubmissionToken {self.token[:8]}... by {self.professor_id}>'

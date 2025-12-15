@@ -41,7 +41,7 @@ def main():
     
     # Print startup information
     print("\n" + "="*60)
-    print("🚀 METADOC BACKEND SERVER STARTING")
+    print("METADOC BACKEND SERVER STARTING")
     print("="*60)
     print(f"Environment: {app.config.get('FLASK_ENV', 'development')}")
     print(f"Debug Mode: {debug}")
@@ -50,7 +50,14 @@ def main():
     print(f"Google OAuth: {'Configured' if app.config.get('GOOGLE_CLIENT_ID') else 'Not configured'}")
     print(f"Gemini AI: {'Configured' if app.config.get('GEMINI_API_KEY') else 'Not configured'}")
     print("="*60)
-    print("\n📋 API Endpoints:")
+    print("\nAPI Endpoints:")
+    # ... (endpoints omitted for brevity in replace, but I need to match the block correctly)
+    
+    # ...
+    
+    # Since I'm replacing a large block, I'll restrict it to the specific print statements.
+
+    # Actually, I'll use multi_replace to target specific emoji lines.
     print("   Authentication:")
     print("   - POST /api/v1/auth/login")
     print("   - GET  /api/v1/auth/callback")
@@ -85,14 +92,14 @@ def main():
     print("="*60)
     
     if not app.config.get('GOOGLE_CLIENT_ID'):
-        print("\n⚠️  WARNING: Google OAuth not configured!")
+        print("\nWARNING: Google OAuth not configured!")
         print("   Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables")
     
     if not os.path.exists('.env'):
-        print("\n⚠️  WARNING: .env file not found!")
+        print("\nWARNING: .env file not found!")
         print("   Copy .env.example to .env and configure your settings")
     
-    print("\n✅ Ready to serve requests!")
+    print("\nReady to serve requests!")
     print("="*60 + "\n")
     
     # Start the development server
@@ -105,9 +112,9 @@ def main():
             threaded=True
         )
     except KeyboardInterrupt:
-        print("\n\n🛑 Server stopped by user")
+        print("\n\nServer stopped by user")
     except Exception as e:
-        print(f"\n❌ Server failed to start: {e}")
+        print(f"\nServer failed to start: {e}")
         sys.exit(1)
 
 if __name__ == '__main__':

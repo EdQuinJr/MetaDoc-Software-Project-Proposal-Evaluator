@@ -89,13 +89,23 @@ const SubmissionDetail = () => {
           </div>
           <div className="info-grid">
             <div className="info-item">
+              <span className="info-label">Student Name</span>
+              <span className="info-value">{submission.student_name || 'Not provided'}</span>
+            </div>
+            <div className="info-item">
               <span className="info-label">Student ID</span>
               <span className="info-value">{submission.student_id || 'Not provided'}</span>
             </div>
             <div className="info-item">
               <span className="info-label">Submission Date</span>
               <span className="info-value">
-                {new Date(submission.created_at).toLocaleString()}
+                {new Date(submission.created_at).toLocaleString([], {
+                  year: 'numeric',
+                  month: 'numeric',
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
               </span>
             </div>
             <div className="info-item">
@@ -139,7 +149,7 @@ const SubmissionDetail = () => {
               </div>
               <div className="stat-item">
                 <span className="stat-label">Page Count</span>
-                <span className="stat-number">{analysis.content_statistics?.page_count || 0}</span>
+                <span className="stat-number">{analysis.content_statistics?.estimated_pages || 0}</span>
               </div>
             </div>
           </div>
@@ -165,7 +175,13 @@ const SubmissionDetail = () => {
                 <span className="info-label">Created Date</span>
                 <span className="info-value">
                   {analysis.document_metadata.creation_date
-                    ? new Date(analysis.document_metadata.creation_date).toLocaleString()
+                    ? new Date(analysis.document_metadata.creation_date).toLocaleString([], {
+                      year: 'numeric',
+                      month: 'numeric',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })
                     : 'Unavailable'}
                 </span>
               </div>
@@ -173,7 +189,13 @@ const SubmissionDetail = () => {
                 <span className="info-label">Last Modified</span>
                 <span className="info-value">
                   {analysis.document_metadata.last_modified_date
-                    ? new Date(analysis.document_metadata.last_modified_date).toLocaleString()
+                    ? new Date(analysis.document_metadata.last_modified_date).toLocaleString([], {
+                      year: 'numeric',
+                      month: 'numeric',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })
                     : 'Unavailable'}
                 </span>
               </div>
@@ -184,7 +206,7 @@ const SubmissionDetail = () => {
                 </span>
               </div>
             </div>
-            
+
             {/* Group Members / Contributors */}
             <div className="card-section">
               <h4 className="section-subtitle">
@@ -193,27 +215,40 @@ const SubmissionDetail = () => {
               </h4>
               <div className="contributors-list">
                 {(() => {
-                  const contributors = [];
-                  
-                  // Add author with creation date
-                  if (analysis.document_metadata.author) {
-                    contributors.push({
-                      name: analysis.document_metadata.author,
-                      role: 'Author',
-                      date: analysis.document_metadata.creation_date,
-                    });
-                  }
-                  
-                  // Add last editor with modification date (if different from author)
-                  if (analysis.document_metadata.last_editor && 
+                  let contributors = [];
+
+                  // Use backend provided contributors list if available
+                  if (analysis.document_metadata.contributors && analysis.document_metadata.contributors.length > 0) {
+                    contributors = analysis.document_metadata.contributors.map(c => ({
+                      name: c.name,
+                      role: c.role,
+                      date: c.email // Temporary hack: backend doesn't send dates for generic contributors yet, or use creation date fallback
+                    }));
+                    // Actually, let's keep it simple. If backend has it, use it.
+                    // Ensure dates are attached if possible, or fallback to main doc dates
+                    contributors = analysis.document_metadata.contributors;
+                  } else {
+                    // Fallback logic
+                    // Add author with creation date
+                    if (analysis.document_metadata.author) {
+                      contributors.push({
+                        name: analysis.document_metadata.author,
+                        role: 'Author',
+                        date: analysis.document_metadata.creation_date,
+                      });
+                    }
+
+                    // Add last editor with modification date (if different from author)
+                    if (analysis.document_metadata.last_editor &&
                       analysis.document_metadata.last_editor !== analysis.document_metadata.author) {
-                    contributors.push({
-                      name: analysis.document_metadata.last_editor,
-                      role: 'Editor',
-                      date: analysis.document_metadata.last_modified_date,
-                    });
+                      contributors.push({
+                        name: analysis.document_metadata.last_editor,
+                        role: 'Editor',
+                        date: analysis.document_metadata.last_modified_date,
+                      });
+                    }
                   }
-                  
+
                   return contributors.length > 0 ? (
                     contributors.map((contributor, index) => (
                       <div key={index} className="contributor-item">
@@ -227,7 +262,13 @@ const SubmissionDetail = () => {
                           </div>
                           {contributor.date && (
                             <div className="contributor-date">
-                              {new Date(contributor.date).toLocaleString()}
+                              {new Date(contributor.date).toLocaleString([], {
+                                year: 'numeric',
+                                month: 'numeric',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              })}
                             </div>
                           )}
                         </div>
@@ -300,7 +341,7 @@ const SubmissionDetail = () => {
                   )}
                 </div>
               )}
-              
+
               {analysis.top_terms && analysis.top_terms.length > 0 && (
                 <div className="nlp-card">
                   <h4>Top Terms</h4>

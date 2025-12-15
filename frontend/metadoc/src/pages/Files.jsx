@@ -31,7 +31,7 @@ const Files = () => {
         page: pagination.page,
         per_page: pagination.per_page,
       };
-      
+
       if (searchTerm) {
         params.student_id = searchTerm;
       }
@@ -57,7 +57,7 @@ const Files = () => {
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
-    
+
     try {
       await dashboardAPI.deleteSubmission(deleteTarget.id);
       // Remove from local state
@@ -82,11 +82,11 @@ const Files = () => {
 
   const handlePreviewFile = async (e, submission) => {
     e.stopPropagation(); // Prevent card click navigation
-    
+
     setPreviewSubmission(submission);
     setShowPreviewModal(true);
     setPreviewLoading(true);
-    
+
     try {
       // Fetch full submission details with analysis
       const response = await dashboardAPI.getSubmissionDetail(submission.id);
@@ -153,8 +153,8 @@ const Files = () => {
                 onClick={() => navigate(`/dashboard/submissions/${submission.id}`)}
               >
                 <div className="submission-card-header">
-                  <div 
-                    className="submission-icon clickable-icon" 
+                  <div
+                    className="submission-icon clickable-icon"
                     onClick={(e) => handlePreviewFile(e, submission)}
                     title="Preview file contents"
                   >
@@ -169,7 +169,7 @@ const Files = () => {
 
                 <div className="submission-card-body">
                   <h3 className="submission-title">{submission.original_filename}</h3>
-                  
+
                   <div className="submission-info-grid">
                     <div className="info-item">
                       <Users size={16} />
@@ -178,7 +178,7 @@ const Files = () => {
                         <span className="info-value">{submission.student_id || 'N/A'}</span>
                       </div>
                     </div>
-                    
+
                     <div className="info-item">
                       <Calendar size={16} />
                       <div>
@@ -188,7 +188,7 @@ const Files = () => {
                         </span>
                       </div>
                     </div>
-                    
+
                     <div className="info-item">
                       <FileType size={16} />
                       <div>
@@ -202,7 +202,7 @@ const Files = () => {
                         </span>
                       </div>
                     </div>
-                    
+
                     <div className="info-item">
                       <Hash size={16} />
                       <div>
@@ -213,7 +213,7 @@ const Files = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   {submission.last_modified && (
                     <div className="last-update">
                       <small>Last updated: {new Date(submission.last_modified).toLocaleString()}</small>
@@ -278,7 +278,7 @@ const Files = () => {
                 <X size={24} />
               </button>
             </div>
-            
+
             <div className="modal-body">
               {previewLoading ? (
                 <div className="loading-state">
@@ -291,7 +291,13 @@ const Files = () => {
                     <h3>{previewSubmission.original_filename}</h3>
                     <div className="preview-meta">
                       <span><strong>Student ID:</strong> {previewSubmission.student_id || 'N/A'}</span>
-                      <span><strong>Submitted:</strong> {new Date(previewSubmission.created_at).toLocaleString()}</span>
+                      <span><strong>Submitted:</strong> {new Date(previewSubmission.created_at).toLocaleString([], {
+                        year: 'numeric',
+                        month: 'numeric',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}</span>
                       {previewSubmission.analysis_summary && (
                         <span><strong>Word Count:</strong> {previewSubmission.analysis_summary.word_count || 'N/A'}</span>
                       )}
@@ -318,14 +324,49 @@ const Files = () => {
                       <h4>Document Metadata:</h4>
                       <div className="metadata-grid">
                         {Object.entries(previewSubmission.analysis_result.document_metadata)
-                          .filter(([key]) => key.toLowerCase() !== 'word_count' && key.toLowerCase() !== 'wordcount')
-                          .map(([key, value]) => (
-                            <div key={key} className="metadata-item">
-                              <span className="metadata-label">{key}:</span>
-                              <span className="metadata-value">{String(value)}</span>
+                          .filter(([key, value]) => {
+                            const lowerKey = key.toLowerCase();
+                            return lowerKey !== 'word_count' &&
+                              lowerKey !== 'wordcount' &&
+                              lowerKey !== 'revision_count' &&
+                              lowerKey !== 'contributors' &&
+                              value !== 'Unavailable';
+                          })
+                          .map(([key, value]) => {
+                            // Format Keys
+                            let displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+                            // Format Values
+                            let displayValue = String(value);
+                            if (key.includes('date') && value) {
+                              displayValue = new Date(value).toLocaleString([], {
+                                year: 'numeric',
+                                month: 'numeric',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                              });
+                            }
+
+                            return (
+                              <div key={key} className="metadata-item">
+                                <span className="metadata-label">{displayKey}:</span>
+                                <span className="metadata-value">{displayValue}</span>
+                              </div>
+                            );
+                          })}
+                      </div>
+
+                      {previewSubmission.analysis_result.document_metadata.contributors && previewSubmission.analysis_result.document_metadata.contributors.length > 0 && (
+                        <div className="contributors-preview" style={{ marginTop: '1rem' }}>
+                          <h4>Contributors:</h4>
+                          {previewSubmission.analysis_result.document_metadata.contributors.map((c, i) => (
+                            <div key={i} style={{ marginBottom: '0.25rem' }}>
+                              <strong>{c.name}</strong> <span style={{ color: '#666' }}>({c.role})</span>
                             </div>
                           ))}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
@@ -337,8 +378,8 @@ const Files = () => {
             </div>
 
             <div className="modal-footer">
-              <button 
-                className="btn btn-primary" 
+              <button
+                className="btn btn-primary"
                 onClick={() => {
                   closePreviewModal();
                   navigate(`/dashboard/submissions/${previewSubmission?.id}`);
@@ -361,7 +402,7 @@ const Files = () => {
               </div>
               <h2>Delete File</h2>
             </div>
-            
+
             <div className="modal-body">
               <p>Are you sure you want to delete <strong>"{deleteTarget.filename}"</strong>?</p>
               <p className="warning-text">This action cannot be undone.</p>

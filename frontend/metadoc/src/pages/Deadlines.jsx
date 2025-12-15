@@ -11,7 +11,7 @@ const Deadlines = () => {
   const [editingDeadline, setEditingDeadline] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -39,16 +39,16 @@ const Deadlines = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError(null);
-    
+
     // Validate deadline is not in the past
     const selectedDate = new Date(formData.deadline_datetime);
     const now = new Date();
-    
+
     if (selectedDate <= now) {
       setFormError('Deadline cannot be set to a past date or current time. Please select a future date and time.');
       return;
     }
-    
+
     try {
       if (editingDeadline) {
         // Update existing deadline
@@ -57,7 +57,7 @@ const Deadlines = () => {
         // Create new deadline
         await dashboardAPI.createDeadline(formData);
       }
-      
+
       setShowModal(false);
       setFormData({ title: '', description: '', deadline_datetime: '' });
       setEditingDeadline(null);
@@ -72,7 +72,7 @@ const Deadlines = () => {
 
   const handleEdit = (deadline) => {
     setEditingDeadline(deadline);
-    
+
     // Format datetime for input (local timezone)
     const dt = new Date(deadline.deadline_datetime);
     const year = dt.getFullYear();
@@ -81,7 +81,7 @@ const Deadlines = () => {
     const hours = String(dt.getHours()).padStart(2, '0');
     const minutes = String(dt.getMinutes()).padStart(2, '0');
     const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
-    
+
     setFormData({
       title: deadline.title,
       description: deadline.description || '',
@@ -98,7 +98,7 @@ const Deadlines = () => {
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
-    
+
     try {
       await dashboardAPI.deleteDeadline(deleteTarget.id);
       setDeadlines(deadlines.filter(d => d.id !== deleteTarget.id));
@@ -126,14 +126,26 @@ const Deadlines = () => {
     const now = new Date();
     const deadline = new Date(deadlineDate);
     const diff = deadline - now;
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
 
     if (diff < 0) return { text: 'Overdue', color: 'error' };
-    if (days === 0 && hours < 24) return { text: `${hours}h remaining`, color: 'warning' };
-    if (days === 0) return { text: 'Today', color: 'warning' };
-    if (days === 1) return { text: 'Tomorrow', color: 'info' };
-    return { text: `${days} days`, color: 'success' };
+
+    // If less than 24 hours, show hours
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    if (hours < 24) {
+      return { text: `${hours}h remaining`, color: 'warning' };
+    }
+
+    // Calculate calendar days
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(deadline);
+    target.setHours(0, 0, 0, 0);
+
+    // Use Math.round to handle DST or slight offsets
+    const calendarDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
+
+    if (calendarDays === 1) return { text: 'Tomorrow', color: 'info' };
+    return { text: `${calendarDays} days`, color: 'success' };
   };
 
   if (loading) {
@@ -198,17 +210,25 @@ const Deadlines = () => {
                     </button>
                   </div>
                 </div>
-                
+
                 <div className="deadline-card-body">
                   <h3>{deadline.title}</h3>
                   {deadline.description && (
                     <p className="deadline-description">{deadline.description}</p>
                   )}
-                  
+
                   <div className="deadline-meta">
                     <div className="deadline-date">
                       <Calendar size={16} />
-                      <span>{new Date(deadline.deadline_datetime).toLocaleString()}</span>
+                      <span>
+                        {new Date(deadline.deadline_datetime).toLocaleString([], {
+                          year: 'numeric',
+                          month: 'numeric',
+                          day: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })}
+                      </span>
                     </div>
                     <div className={`deadline-status status-${timeInfo.color}`}>
                       {timeInfo.text}
@@ -231,7 +251,7 @@ const Deadlines = () => {
                 ×
               </button>
             </div>
-            
+
             <form onSubmit={handleSubmit}>
               {formError && (
                 <div className="alert alert-error">
@@ -239,7 +259,7 @@ const Deadlines = () => {
                   <span>{formError}</span>
                 </div>
               )}
-              
+
               <div className="form-group">
                 <label htmlFor="title">Title *</label>
                 <input
@@ -273,6 +293,7 @@ const Deadlines = () => {
                   className="form-control"
                   value={formData.deadline_datetime}
                   onChange={(e) => setFormData({ ...formData, deadline_datetime: e.target.value })}
+                  min={new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
                   required
                 />
                 <small className="form-text">Select a future date and time</small>
@@ -298,7 +319,7 @@ const Deadlines = () => {
               </div>
               <h2>Delete Deadline</h2>
             </div>
-            
+
             <div className="modal-body">
               <p>Are you sure you want to delete <strong>"{deleteTarget.title}"</strong>?</p>
               <p className="warning-text">This action cannot be undone.</p>

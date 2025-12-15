@@ -92,7 +92,12 @@ const Dashboard = () => {
       setSubmissionToken(response.data.token);
     } catch (err) {
       console.error('Failed to generate token:', err);
-      alert('Failed to generate submission token. Please try again.');
+      const errorMsg = err.response?.data?.error || 'Failed to generate submission token. Please try again.';
+      setErrorMessage({
+        title: 'Token Generation Failed',
+        body: errorMsg
+      });
+      setShowErrorModal(true);
     } finally {
       setTokenLoading(false);
     }
@@ -161,10 +166,10 @@ const Dashboard = () => {
           <ExternalLink size={20} />
           <h3>Student Submission Portal</h3>
         </div>
-        
+
         <div className="compact-content">
-          <select 
-            value={selectedDeadline} 
+          <select
+            value={selectedDeadline}
             onChange={(e) => setSelectedDeadline(e.target.value)}
             className="compact-select"
           >
@@ -176,8 +181,8 @@ const Dashboard = () => {
             ))}
           </select>
 
-          <button 
-            className="btn-compact btn-generate" 
+          <button
+            className="btn-compact btn-generate"
             onClick={generateToken}
             disabled={tokenLoading}
           >
@@ -187,8 +192,8 @@ const Dashboard = () => {
 
           {submissionToken && (
             <>
-              <button 
-                className="btn-compact btn-copy" 
+              <button
+                className="btn-compact btn-copy"
                 onClick={copySubmissionLink}
               >
                 <Copy size={16} />
@@ -350,8 +355,11 @@ const Dashboard = () => {
                 <AlertCircle size={48} />
               </div>
               <h2>{errorMessage.title}</h2>
+              <button className="btn-close" onClick={() => setShowErrorModal(false)}>
+                ×
+              </button>
             </div>
-            
+
             <div className="modal-body">
               <p>{errorMessage.body}</p>
             </div>
@@ -401,12 +409,21 @@ const getTimeRemaining = (deadlineDate) => {
   const now = new Date();
   const deadline = new Date(deadlineDate);
   const diff = deadline - now;
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-  if (days < 0) return 'Overdue';
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Tomorrow';
-  return `${days} days`;
+  if (diff < 0) return 'Overdue';
+
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  if (hours < 24) return `${hours}h remaining`;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(deadline);
+  target.setHours(0, 0, 0, 0);
+
+  const calendarDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
+
+  if (calendarDays === 1) return 'Tomorrow';
+  return `${calendarDays} days`;
 };
 
 export default Dashboard;

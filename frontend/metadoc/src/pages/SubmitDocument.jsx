@@ -13,12 +13,14 @@ const SubmitDocument = () => {
   const [file, setFile] = useState(null);
   const [uploadData, setUploadData] = useState({
     student_id: '',
+    student_name: '',
   });
 
   // Drive link form state
   const [driveData, setDriveData] = useState({
     drive_link: '',
     student_id: '',
+    student_name: '',
   });
 
   const [linkValidation, setLinkValidation] = useState(null);
@@ -39,7 +41,7 @@ const SubmitDocument = () => {
         setFile(null);
         return;
       }
-      
+
       // Validate file size (50MB)
       if (selectedFile.size > 50 * 1024 * 1024) {
         setError('File size must be less than 50MB');
@@ -74,6 +76,7 @@ const SubmitDocument = () => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('student_id', uploadData.student_id);
+      formData.append('student_name', uploadData.student_name);
       formData.append('token', token);
 
       const response = await submissionAPI.uploadFile(formData);
@@ -81,16 +84,16 @@ const SubmitDocument = () => {
         message: '✅ Document uploaded and analysis started successfully!',
         jobId: response.data.job_id,
       });
-      
+
       // Reset form
       setFile(null);
-      setUploadData({ student_id: '' });
-      
+      setUploadData({ student_id: '', student_name: '' });
+
       // Clear success message after 5 seconds
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       const errorMessage = err.response?.data?.error || 'Failed to upload file';
-      
+
       // Check for specific error types
       if (errorMessage.includes('empty') || errorMessage.includes('insufficient content')) {
         setError('❌ Document is empty or has insufficient content. Please upload a valid document with text.');
@@ -157,17 +160,17 @@ const SubmitDocument = () => {
 
     try {
       const submissionData = { ...driveData, token };
-      
+
       const response = await submissionAPI.submitDriveLink(submissionData);
       setSuccess({
         message: '✅ Google Drive document retrieved and analysis started successfully!',
         jobId: response.data.job_id,
       });
-      
+
       // Reset form
-      setDriveData({ drive_link: '', student_id: '' });
+      setDriveData({ drive_link: '', student_id: '', student_name: '' });
       setLinkValidation(null);
-      
+
       // Clear success message after 5 seconds
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
@@ -179,7 +182,7 @@ const SubmitDocument = () => {
         });
       } else {
         const errorMessage = errorData?.error || 'Failed to submit Google Drive link';
-        
+
         // Check for specific error types
         if (errorMessage.includes('empty') || errorMessage.includes('insufficient content')) {
           setError('❌ Document is empty or has insufficient content. Please provide a valid document with text.');
@@ -204,236 +207,262 @@ const SubmitDocument = () => {
           <p>Upload a DOCX file or provide a Google Drive link for analysis</p>
         </div>
 
-      {!getTokenFromURL() && (
-        <div className="alert alert-error">
-          <AlertCircle size={20} />
-          <div>
-            <p className="font-semibold">Invalid Submission Link</p>
-            <p className="text-sm">Please use the submission link provided by your professor.</p>
-          </div>
-        </div>
-      )}
-
-      {success && (
-        <div className="alert alert-success">
-          <CheckCircle size={20} />
-          <div>
-            <p className="font-semibold">{success.message}</p>
-            <p className="text-sm">Job ID: {success.jobId}</p>
-          </div>
-        </div>
-      )}
-
-      <div className="submit-tabs">
-        <button
-          className={`tab-button ${activeTab === 'upload' ? 'tab-active' : ''}`}
-          onClick={() => setActiveTab('upload')}
-        >
-          <Upload size={20} />
-          File Upload
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'drive' ? 'tab-active' : ''}`}
-          onClick={() => setActiveTab('drive')}
-        >
-          <LinkIcon size={20} />
-          Google Drive Link
-        </button>
-      </div>
-
-      <div className="submit-content">
-        {activeTab === 'upload' ? (
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title">Upload Document</h3>
-              <p className="card-description">
-                Upload a DOCX or DOC file (max 50MB)
-              </p>
+        {!getTokenFromURL() && (
+          <div className="alert alert-error">
+            <AlertCircle size={20} />
+            <div>
+              <p className="font-semibold">Invalid Submission Link</p>
+              <p className="text-sm">Please use the submission link provided by your professor.</p>
             </div>
-
-            <form onSubmit={handleUploadSubmit}>
-              <div className="file-upload-area">
-                <input
-                  type="file"
-                  id="file-input"
-                  accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  onChange={handleFileChange}
-                  className="file-input-hidden"
-                />
-                <label htmlFor="file-input" className="file-upload-label">
-                  {file ? (
-                    <div className="file-selected">
-                      <FileText size={48} />
-                      <p className="file-name">{file.name}</p>
-                      <p className="file-size">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                    </div>
-                  ) : (
-                    <div className="file-placeholder">
-                      <Upload size={48} />
-                      <p className="upload-text">Click to browse or drag and drop</p>
-                      <p className="upload-hint">DOCX or DOC files only</p>
-                    </div>
-                  )}
-                </label>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Student ID Number</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={uploadData.student_id}
-                  onChange={(e) =>
-                    setUploadData({ ...uploadData, student_id: e.target.value })
-                  }
-                  placeholder="e.g., 22-1686-452"
-                />
-              </div>
-
-              {error && typeof error === 'string' && (
-                <div className="alert alert-error">
-                  <AlertCircle size={20} />
-                  <p>{error}</p>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="btn btn-primary btn-lg"
-                disabled={loading || !file}
-              >
-                {loading ? (
-                  <>
-                    <Loader size={20} className="spinner-icon" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload size={20} />
-                    Upload Document
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        ) : (
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title">Google Drive Link</h3>
-              <p className="card-description">
-                Provide a link to your Google Docs or DOCX file
-              </p>
-            </div>
-
-            <form onSubmit={handleDriveLinkSubmit}>
-              <div className="form-group">
-                <label className="form-label">Google Drive Link</label>
-                <div className="input-with-button">
-                  <input
-                    type="url"
-                    className="form-input"
-                    value={driveData.drive_link}
-                    onChange={(e) =>
-                      setDriveData({ ...driveData, drive_link: e.target.value })
-                    }
-                    placeholder="https://drive.google.com/file/d/..."
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={handleValidateLink}
-                    disabled={loading || !driveData.drive_link}
-                  >
-                    Validate
-                  </button>
-                </div>
-              </div>
-
-              {linkValidation && (
-                <div className={`alert ${linkValidation.valid ? 'alert-success' : 'alert-error'}`}>
-                  {linkValidation.valid ? (
-                    <>
-                      <CheckCircle size={20} />
-                      <div>
-                        <p className="font-semibold">Link is valid!</p>
-                        <p className="text-sm">File: {linkValidation.fileInfo?.name}</p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <AlertCircle size={20} />
-                      <div>
-                        <p className="font-semibold">{linkValidation.error}</p>
-                        {linkValidation.guidance && (
-                          <div className="guidance-steps">
-                            {linkValidation.guidance.steps?.map((step, index) => (
-                              <p key={index} className="text-sm">{step}</p>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
-              <div className="form-group">
-                <label className="form-label">Student ID Number</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={driveData.student_id}
-                  onChange={(e) =>
-                    setDriveData({ ...driveData, student_id: e.target.value })
-                  }
-                  placeholder="e.g., 22-1686-452"
-                />
-              </div>
-
-              {error && typeof error === 'object' && (
-                <div className="alert alert-error">
-                  <AlertCircle size={20} />
-                  <div>
-                    <p className="font-semibold">{error.message}</p>
-                    {error.guidance && (
-                      <div className="guidance-steps">
-                        {error.guidance.steps?.map((step, index) => (
-                          <p key={index} className="text-sm">{step}</p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {error && typeof error === 'string' && (
-                <div className="alert alert-error">
-                  <AlertCircle size={20} />
-                  <p>{error}</p>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="btn btn-primary btn-lg"
-                disabled={loading || !driveData.drive_link}
-              >
-                {loading ? (
-                  <>
-                    <Loader size={20} className="spinner-icon" />
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <LinkIcon size={20} />
-                    Submit Link
-                  </>
-                )}
-              </button>
-            </form>
           </div>
         )}
-      </div>
+
+        {success && (
+          <div className="alert alert-success">
+            <CheckCircle size={20} />
+            <div>
+              <p className="font-semibold">{success.message}</p>
+              <p className="text-sm">Job ID: {success.jobId}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="submit-tabs">
+          <button
+            className={`tab-button ${activeTab === 'upload' ? 'tab-active' : ''}`}
+            onClick={() => setActiveTab('upload')}
+          >
+            <Upload size={20} />
+            File Upload
+          </button>
+          <button
+            className={`tab-button ${activeTab === 'drive' ? 'tab-active' : ''}`}
+            onClick={() => setActiveTab('drive')}
+          >
+            <LinkIcon size={20} />
+            Google Drive Link
+          </button>
+        </div>
+
+        <div className="submit-content">
+          {activeTab === 'upload' ? (
+            <div className="card">
+              <div className="card-header">
+                <h3 className="card-title">Upload Document</h3>
+                <p className="card-description">
+                  Upload a DOCX or DOC file (max 50MB)
+                </p>
+              </div>
+
+              <form onSubmit={handleUploadSubmit}>
+                <div className="file-upload-area">
+                  <input
+                    type="file"
+                    id="file-input"
+                    accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    onChange={handleFileChange}
+                    className="file-input-hidden"
+                  />
+                  <label htmlFor="file-input" className="file-upload-label">
+                    {file ? (
+                      <div className="file-selected">
+                        <FileText size={48} />
+                        <p className="file-name">{file.name}</p>
+                        <p className="file-size">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                      </div>
+                    ) : (
+                      <div className="file-placeholder">
+                        <Upload size={48} />
+                        <p className="upload-text">Click to browse or drag and drop</p>
+                        <p className="upload-hint">DOCX or DOC files only</p>
+                      </div>
+                    )}
+                  </label>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Full Name</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={uploadData.student_name}
+                    onChange={(e) =>
+                      setUploadData({ ...uploadData, student_name: e.target.value })
+                    }
+                    placeholder="e.g., Juan Dela Cruz"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Student ID Number</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={uploadData.student_id}
+                    onChange={(e) =>
+                      setUploadData({ ...uploadData, student_id: e.target.value })
+                    }
+                    placeholder="e.g., 22-1686-452"
+                  />
+                </div>
+
+                {error && typeof error === 'string' && (
+                  <div className="alert alert-error">
+                    <AlertCircle size={20} />
+                    <p>{error}</p>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-lg"
+                  disabled={loading || !file}
+                >
+                  {loading ? (
+                    <>
+                      <Loader size={20} className="spinner-icon" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={20} />
+                      Upload Document
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="card">
+              <div className="card-header">
+                <h3 className="card-title">Google Drive Link</h3>
+                <p className="card-description">
+                  Provide a link to your Google Docs or DOCX file
+                </p>
+              </div>
+
+              <form onSubmit={handleDriveLinkSubmit}>
+                <div className="form-group">
+                  <label className="form-label">Google Drive Link</label>
+                  <div className="input-with-button">
+                    <input
+                      type="url"
+                      className="form-input"
+                      value={driveData.drive_link}
+                      onChange={(e) =>
+                        setDriveData({ ...driveData, drive_link: e.target.value })
+                      }
+                      placeholder="https://drive.google.com/file/d/..."
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleValidateLink}
+                      disabled={loading || !driveData.drive_link}
+                    >
+                      Validate
+                    </button>
+                  </div>
+                </div>
+
+                {linkValidation && (
+                  <div className={`alert ${linkValidation.valid ? 'alert-success' : 'alert-error'}`}>
+                    {linkValidation.valid ? (
+                      <>
+                        <CheckCircle size={20} />
+                        <div>
+                          <p className="font-semibold">Link is valid!</p>
+                          <p className="text-sm">File: {linkValidation.fileInfo?.name}</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle size={20} />
+                        <div>
+                          <p className="font-semibold">{linkValidation.error}</p>
+                          {linkValidation.guidance && (
+                            <div className="guidance-steps">
+                              {linkValidation.guidance.steps?.map((step, index) => (
+                                <p key={index} className="text-sm">{step}</p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label">Full Name</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={driveData.student_name}
+                    onChange={(e) =>
+                      setDriveData({ ...driveData, student_name: e.target.value })
+                    }
+                    placeholder="e.g., Juan Dela Cruz"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Student ID Number</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={driveData.student_id}
+                    onChange={(e) =>
+                      setDriveData({ ...driveData, student_id: e.target.value })
+                    }
+                    placeholder="e.g., 22-1686-452"
+                  />
+                </div>
+
+                {error && typeof error === 'object' && (
+                  <div className="alert alert-error">
+                    <AlertCircle size={20} />
+                    <div>
+                      <p className="font-semibold">{error.message}</p>
+                      {error.guidance && (
+                        <div className="guidance-steps">
+                          {error.guidance.steps?.map((step, index) => (
+                            <p key={index} className="text-sm">{step}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {error && typeof error === 'string' && (
+                  <div className="alert alert-error">
+                    <AlertCircle size={20} />
+                    <p>{error}</p>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-lg"
+                  disabled={loading || !driveData.drive_link}
+                >
+                  {loading ? (
+                    <>
+                      <Loader size={20} className="spinner-icon" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <LinkIcon size={20} />
+                      Submit Link
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

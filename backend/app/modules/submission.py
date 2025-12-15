@@ -118,7 +118,7 @@ class SubmissionService:
             # Get file metadata
             metadata = service.files().get(
                 fileId=file_id,
-                fields='id,name,mimeType,size,createdTime,modifiedTime,owners,lastModifyingUser'
+                fields='id,name,mimeType,size,createdTime,modifiedTime,owners,lastModifyingUser,permissions'
             ).execute()
             
             return metadata, None
@@ -152,18 +152,19 @@ class SubmissionService:
                 'message': 'Unexpected error occurred'
             }
     
-    def download_drive_file(self, file_id, filename):
+    def download_drive_file(self, file_id, filename, mime_type=None):
         """Download file from Google Drive to temporary storage"""
         try:
             service = self._get_drive_service()
             
-            # For Google Docs, export as DOCX
-            if filename.endswith('.gdoc') or 'google-apps.document' in str(filename):
+            # For Google Docs (based on mime_type), export as DOCX
+            if mime_type == 'application/vnd.google-apps.document' or filename.endswith('.gdoc'):
                 request_obj = service.files().export_media(
                     fileId=file_id,
                     mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
                 )
-                filename = filename.replace('.gdoc', '.docx')
+                if not filename.endswith('.docx'):
+                   filename = filename.replace('.gdoc', '.docx') if filename.endswith('.gdoc') else filename + '.docx'
             else:
                 # For regular files, download as-is
                 request_obj = service.files().get_media(fileId=file_id)
@@ -342,6 +343,7 @@ def upload_file():
         
         # Extract additional form data
         student_id = request.form.get('student_id', '').strip()
+        student_name = request.form.get('student_name', '').strip()
         
         # Validate file
         validation_errors = submission_service.validate_file(file)
@@ -445,6 +447,7 @@ def upload_file():
             mime_type=mime_type,
             submission_type='upload',
             student_id=student_id if student_id else None,
+            student_name=student_name if student_name else None,
             deadline_id=deadline_id if deadline_id else None,
             professor_id=professor_id,
             status=SubmissionStatus.PENDING
@@ -552,6 +555,7 @@ def submit_drive_link():
         
         drive_link = data['drive_link'].strip()
         student_id = data.get('student_id', '').strip()
+        student_name = data.get('student_name', '').strip()
         
         # Validate drive link format
         file_id, validation_error = submission_service.validate_drive_link(drive_link)
@@ -583,7 +587,7 @@ def submit_drive_link():
         if not filename.endswith(('.docx', '.doc')):
             filename += '.docx'
         
-        file_path, download_error = submission_service.download_drive_file(file_id, filename)
+        file_path, download_error = submission_service.download_drive_file(file_id, filename, mime_type=metadata['mimeType'])
         
         if download_error:
             return jsonify({'error': download_error}), 500
@@ -683,6 +687,7 @@ def submit_drive_link():
             submission_type='drive_link',
             google_drive_link=drive_link,
             student_id=student_id if student_id else None,
+            student_name=student_name if student_name else None,
             deadline_id=deadline_id if deadline_id else None,
             professor_id=professor_id,
             status=SubmissionStatus.PENDING
@@ -711,15 +716,65 @@ def submit_drive_link():
                 # Merge Google Drive metadata with document metadata
                 # Google Drive metadata has more accurate editor/owner information
                 if metadata.get('owners'):
-                    # Get the first owner's display name
+                    # Get the first owner's display name for legacy author field
                     owner = metadata['owners'][0]
                     if not doc_metadata.get('author') or doc_metadata['author'] == 'Unavailable':
                         doc_metadata['author'] = owner.get('displayName', owner.get('emailAddress', 'Unavailable'))
+                    
+                    # Capture full list of contributors (up to 5)
+                    doc_metadata['contributors'] = []
+                    # Add owners
+                    for owner in metadata['owners']:
+                        # Avoid duplicates if we process this list
+                        pass 
+                    
+                    # We'll build a unique list of contributors
+                # Start with owners
+                    seen_emails = set()
+                    
+                    if not doc_metadata.get('contributors'):
+                        doc_metadata['contributors'] = []
+
+                    for owner in metadata.get('owners', []):
+                         email = owner.get('emailAddress', '')
+                         if email and email not in seen_emails:
+                             doc_metadata['contributors'].append({
+                                 'name': owner.get('displayName', email),
+                                 'role': 'Owner and Writer',
+                                 'email': email
+                             })
+                             seen_emails.add(email)
                 
                 if metadata.get('lastModifyingUser'):
                     # Get the last editor from Google Drive
                     last_user = metadata['lastModifyingUser']
                     doc_metadata['last_editor'] = last_user.get('displayName', last_user.get('emailAddress', 'Unavailable'))
+                    
+                    # Add to contributors if unique
+                    email = last_user.get('emailAddress', '')
+                    if email and email not in seen_emails:
+                         doc_metadata['contributors'].append({
+                             'name': last_user.get('displayName', email),
+                             'role': 'Last Editor',
+                             'email': email
+                         })
+                         seen_emails.add(email)
+                
+                # Check permissions list for other contributors
+                if metadata.get('permissions'):
+                    for perm in metadata['permissions']:
+                        email = perm.get('emailAddress', '')
+                        if email and email not in seen_emails:
+                            role = perm.get('role', 'Viewer').capitalize()
+                            doc_metadata['contributors'].append({
+                                'name': perm.get('displayName', email),
+                                'role': role,
+                                'email': email
+                            })
+                            seen_emails.add(email)
+                
+                # Limit to 5 contributors
+                doc_metadata['contributors'] = doc_metadata.get('contributors', [])[:5]
                 
                 # Use Google Drive timestamps if document timestamps are missing
                 if metadata.get('createdTime') and not doc_metadata.get('creation_date'):

@@ -628,7 +628,9 @@ def register():
         # Check if user already exists
         existing_user = User.query.filter_by(email=email).first()
         if existing_user:
-            return jsonify({'error': 'Email already registered'}), 409
+            if existing_user.google_id:
+                return jsonify({'error': 'Account already registered with Google. Please sign in with Google.'}), 409
+            return jsonify({'error': 'Account already registered with this email.'}), 409
         
         # Create new user
         user = User(
