@@ -526,7 +526,8 @@ def generate_submission_token():
                 return jsonify({'error': 'Invalid deadline or access denied'}), 404
             
             # Check if deadline is in the past
-            if deadline.deadline_datetime < datetime.utcnow():
+            # Check if deadline is in the past
+            if deadline.deadline_datetime < datetime.now():
                 return jsonify({'error': 'Cannot generate submission link: The selected deadline is past or outdated.'}), 400
         
         # Generate submission token (valid for 30 days)

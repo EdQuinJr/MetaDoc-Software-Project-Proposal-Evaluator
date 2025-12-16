@@ -311,7 +311,12 @@ const Dashboard = () => {
           {overview?.upcoming_deadlines?.length > 0 ? (
             <div className="deadlines-list">
               {overview.upcoming_deadlines.map((deadline) => (
-                <div key={deadline.id} className="deadline-item">
+                <div
+                  key={deadline.id}
+                  className="deadline-item"
+                  onClick={() => navigate('/dashboard/submissions', { state: { deadlineId: deadline.id } })}
+                  style={{ cursor: 'pointer' }}
+                >
                   <div className="deadline-icon">
                     <Calendar size={20} />
                   </div>

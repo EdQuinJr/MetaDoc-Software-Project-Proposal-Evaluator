@@ -14,6 +14,7 @@ from enum import Enum as PyEnum
 from app import db
 from sqlalchemy import Text, JSON
 import uuid
+import pytz
 
 # Enum classes for status tracking
 class SubmissionStatus(PyEnum):
@@ -117,6 +118,25 @@ class Submission(BaseModel):
             deadline = Deadline.query.filter_by(id=self.deadline_id).first()
             if not deadline:
                 return False
+                
+            # Handle timezone conversion
+            # created_at is UTC (naive). Make it aware.
+            created_at_utc = self.created_at.replace(tzinfo=pytz.UTC)
+            
+            # deadline_datetime is typically naive (representing local time in deadline.timezone)
+            if deadline.timezone and deadline.timezone != 'UTC':
+                try:
+                    local_tz = pytz.timezone(deadline.timezone)
+                    # Localize the naive deadline time to the specific timezone
+                    deadline_aware = local_tz.localize(deadline.deadline_datetime)
+                    # Convert to UTC for comparison
+                    deadline_utc = deadline_aware.astimezone(pytz.UTC)
+                    return created_at_utc > deadline_utc
+                except Exception:
+                    # Fallback if timezone invalid
+                    pass
+            
+            # If standard UTC or fallback
             return self.created_at > deadline.deadline_datetime
         except Exception as e:
             return False
@@ -141,6 +161,23 @@ class Submission(BaseModel):
         return f'<Submission {self.job_id}>'
     
     def to_dict(self):
+        # Ensure UTC timestamps are formatted with Z
+        created_at_iso = self.created_at.isoformat()
+        if not created_at_iso.endswith('Z') and not '+' in created_at_iso:
+            created_at_iso += 'Z'
+            
+        last_modified_iso = self.last_modified.isoformat() if self.last_modified else None
+        if last_modified_iso and not last_modified_iso.endswith('Z') and not '+' in last_modified_iso:
+            last_modified_iso += 'Z'
+
+        started_at_iso = self.processing_started_at.isoformat() if self.processing_started_at else None
+        if started_at_iso and not started_at_iso.endswith('Z') and not '+' in started_at_iso:
+            started_at_iso += 'Z'
+
+        completed_at_iso = self.processing_completed_at.isoformat() if self.processing_completed_at else None
+        if completed_at_iso and not completed_at_iso.endswith('Z') and not '+' in completed_at_iso:
+            completed_at_iso += 'Z'
+
         return {
             'id': self.id,
             'job_id': self.job_id,
@@ -153,11 +190,11 @@ class Submission(BaseModel):
             'student_name': self.student_name,
             'status': self.status.value,
             'is_late': self.is_late,
-            'last_modified': self.last_modified.isoformat() if self.last_modified else None,
+            'last_modified': last_modified_iso,
             'analysis_summary': self.analysis_summary,
-            'created_at': self.created_at.isoformat(),
-            'processing_started_at': self.processing_started_at.isoformat() if self.processing_started_at else None,
-            'processing_completed_at': self.processing_completed_at.isoformat() if self.processing_completed_at else None,
+            'created_at': created_at_iso,
+            'processing_started_at': started_at_iso,
+            'processing_completed_at': completed_at_iso,
             'error_message': self.error_message
         }
 

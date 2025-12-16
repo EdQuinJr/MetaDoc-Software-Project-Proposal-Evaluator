@@ -244,45 +244,11 @@ class MetadataExtractionService:
     
     def validate_document_completeness(self, content_stats, text):
         """Validate document completeness according to SRS requirements"""
+        # Validation warnings disabled by user request
         warnings = []
         is_complete = True
         
-        # Check minimum word count
-        if content_stats['word_count'] < self.min_word_count:
-            warnings.append(f"Document appears incomplete: only {content_stats['word_count']} words (minimum: {self.min_word_count})")
-            is_complete = False
-        
-        # Check maximum word count
-        if content_stats['word_count'] > self.max_word_count:
-            warnings.append(f"Document exceeds maximum length: {content_stats['word_count']} words (maximum: {self.max_word_count})")
-        
-        # Check for empty or very short sentences
-        if content_stats['sentence_count'] < 3:
-            warnings.append("Document has very few sentences")
-            is_complete = False
-        
-        # Check for placeholder text or templates
-        placeholder_patterns = [
-            r'\[.*\]',  # [Insert text here]
-            r'lorem ipsum',
-            r'placeholder',
-            r'insert.*here',
-            r'add.*content',
-            r'write.*here'
-        ]
-        
-        text_lower = text.lower() if text else ""
-        for pattern in placeholder_patterns:
-            if re.search(pattern, text_lower):
-                warnings.append("Document may contain placeholder text")
-                break
-        
-        # Check for repeated content (potential copy-paste issues)
-        if text and len(text) > 100:
-            # Simple check for repeated paragraphs
-            paragraphs = [p.strip() for p in text.split('\n') if len(p.strip()) > 20]
-            if len(paragraphs) != len(set(paragraphs)) and len(paragraphs) > 1:
-                warnings.append("Document may contain repeated content")
+        # All validation checks removed to prevent warnings
         
         return is_complete, warnings
     

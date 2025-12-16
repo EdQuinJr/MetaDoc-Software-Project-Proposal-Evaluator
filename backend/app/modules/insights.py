@@ -66,7 +66,22 @@ class HeuristicInsightsService:
             
             deadline_time = deadline.deadline_datetime
             if deadline_time.tzinfo is None:
-                deadline_time = pytz.UTC.localize(deadline_time)
+                # If deadline has a timezone, localize to that timezone
+                if request_tz := getattr(deadline, 'timezone', None):
+                    if request_tz and request_tz != 'UTC':
+                        try:
+                            local_tz = pytz.timezone(request_tz)
+                            deadline_time = local_tz.localize(deadline_time)
+                        except Exception:
+                            deadline_time = pytz.UTC.localize(deadline_time)
+                    else:
+                        deadline_time = pytz.UTC.localize(deadline_time)
+                else:
+                    deadline_time = pytz.UTC.localize(deadline_time)
+            
+            # Normalize to UTC for comparison
+            submission_time = submission_time.astimezone(pytz.UTC)
+            deadline_time = deadline_time.astimezone(pytz.UTC)
             
             # Calculate time difference
             time_difference = submission_time - deadline_time
@@ -439,7 +454,7 @@ def analyze_insights(submission_id):
         analysis_result.heuristic_insights = insights
         analysis_result.timeliness_classification = insights['timeliness']['classification']
         
-        if insights['contribution_analysis']['has comparison']:
+        if insights['contribution_analysis']['has_comparison']:
             analysis_result.contribution_growth_percentage = insights['contribution_analysis']['change_percentage']
         
         db.session.commit()
