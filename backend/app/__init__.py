@@ -108,8 +108,9 @@ def register_blueprints(app):
     app.register_blueprint(insights_bp, url_prefix='/api/v1/insights')
     
     # Module 4: NLP Analysis
-    from app.modules.nlp import nlp_bp
-    app.register_blueprint(nlp_bp, url_prefix='/api/v1/nlp')
+    # Temporarily disabled - requires spacy which needs Visual C++ Build Tools
+    # from app.modules.nlp import nlp_bp
+    # app.register_blueprint(nlp_bp, url_prefix='/api/v1/nlp')
     
     # Module 5: Dashboard and Authentication
     from app.modules.dashboard import dashboard_bp
