@@ -343,11 +343,15 @@ class DashboardService:
             # Parse deadline datetime
             deadline_datetime = datetime.fromisoformat(deadline_data['deadline_datetime'])
             
-            # Validate deadline is not in the past - REMOVED to allow past deadlines (suspended)
-            # current_datetime = datetime.utcnow()
-            # if deadline_datetime <= current_datetime:
-            #     return None, "Deadline cannot be set to a past date or current time. Please select a future date and time."
+            # Check for duplicate title
+            existing_deadline = Deadline.query.filter_by(
+                professor_id=user_id,
+                title=deadline_data['title']
+            ).first()
             
+            if existing_deadline:
+                return None, f"A deadline with the title '{deadline_data['title']}' already exists. Please use a unique title."
+
             # Create deadline
             deadline = Deadline(
                 title=deadline_data['title'],

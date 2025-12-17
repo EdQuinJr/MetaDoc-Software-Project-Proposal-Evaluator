@@ -12,7 +12,12 @@ import {
   ExternalLink,
   Copy,
   RefreshCw,
+  Users,
 } from 'lucide-react';
+import Table from '../components/common/Table/Table';
+import Card from '../components/common/Card/Card';
+import Badge from '../components/common/Badge/Badge';
+import Modal from '../components/common/Modal/Modal';
 import '../styles/Dashboard.css';
 
 const Dashboard = () => {
@@ -42,7 +47,6 @@ const Dashboard = () => {
     } catch (err) {
       console.error('Failed to fetch overview:', err);
       setError('Failed to load dashboard data');
-      // Set default empty data to allow dashboard to render
       setOverview({
         total_submissions: 0,
         pending_submissions: 0,
@@ -58,7 +62,7 @@ const Dashboard = () => {
 
   const fetchDeadlines = async () => {
     try {
-      const response = await dashboardAPI.getDeadlines(false); // Only active deadlines
+      const response = await dashboardAPI.getDeadlines(false);
       setDeadlines(response.data.deadlines || []);
     } catch (err) {
       console.error('Failed to fetch deadlines:', err);
@@ -66,7 +70,6 @@ const Dashboard = () => {
   };
 
   const generateToken = async () => {
-    // Check if there are any deadlines
     if (deadlines.length === 0) {
       setErrorMessage({
         title: 'No Deadline Found',
@@ -76,7 +79,6 @@ const Dashboard = () => {
       return;
     }
 
-    // Check if a deadline is selected
     if (!selectedDeadline) {
       setErrorMessage({
         title: 'No Deadline Selected',
@@ -132,6 +134,104 @@ const Dashboard = () => {
     );
   }
 
+  const resultColumns = [
+    {
+      header: 'File Name',
+      key: 'filename',
+      render: (submission) => (
+        <div className="file-info-cell">
+          <div className="file-icon-mini">
+            <FileText size={18} />
+          </div>
+          <span className="file-name" title={submission.original_filename}>
+            {submission.original_filename}
+          </span>
+        </div>
+      )
+    },
+    {
+      header: 'Student ID',
+      key: 'student_id',
+      render: (submission) => (
+        <span className="student-id-pill">
+          <Users size={14} className="icon-subtle" />
+          {submission.student_id || 'N/A'}
+        </span>
+      )
+    },
+    {
+      header: 'Date Submitted',
+      key: 'date',
+      render: (submission) => (
+        <div className="date-cell">
+          <span>{new Date(submission.created_at).toLocaleDateString()}</span>
+          <span className="time-subtle">
+            {new Date(submission.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+      )
+    },
+    {
+      header: 'Status',
+      key: 'status',
+      render: (submission) => (
+        <Badge variant={getStatusColor(submission.status)}>
+          {submission.status}
+        </Badge>
+      )
+    }
+  ];
+
+  const deadlineColumns = [
+    {
+      header: 'Deadline Title',
+      key: 'title',
+      render: (deadline) => (
+        <div className="file-info-cell">
+          <div className="file-icon-mini">
+            <Calendar size={18} />
+          </div>
+          <span className="file-name" title={deadline.title}>
+            {deadline.title}
+          </span>
+        </div>
+      )
+    },
+    {
+      header: 'Due Date',
+      key: 'duedate',
+      render: (deadline) => (
+        <div className="date-cell">
+          <span>{new Date(deadline.deadline_datetime).toLocaleDateString()}</span>
+          <span className="time-subtle">
+            {getTimeRemaining(deadline.deadline_datetime)}
+          </span>
+        </div>
+      )
+    },
+    {
+      header: 'Submissions',
+      key: 'submissions',
+      render: (deadline) => (
+        <Badge variant="info">
+          {deadline.submission_count || 0} Submissions
+        </Badge>
+      )
+    },
+    {
+      header: 'Status',
+      key: 'status',
+      render: (deadline) => {
+        const isClosed = new Date(deadline.deadline_datetime) < new Date();
+        return (
+          <Badge variant={isClosed ? 'error' : 'success'}>
+            {isClosed ? 'Closed' : 'Active'}
+          </Badge>
+        );
+      }
+    }
+  ];
+
   const stats = [
     {
       label: 'Total SPPs',
@@ -149,6 +249,28 @@ const Dashboard = () => {
     },
   ];
 
+  const modalFooter = errorMessage.title === 'No Deadline Found' ? (
+    <button
+      type="button"
+      className="btn btn-primary"
+      onClick={() => {
+        setShowErrorModal(false);
+        navigate('/dashboard/deadlines');
+      }}
+    >
+      <Calendar size={18} />
+      Go to Deadline Management
+    </button>
+  ) : (
+    <button
+      type="button"
+      className="btn btn-primary"
+      onClick={() => setShowErrorModal(false)}
+    >
+      OK
+    </button>
+  );
+
   return (
     <div className="dashboard-page">
       <div className="dashboard-header">
@@ -160,7 +282,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Student Submission Link Banner - Compact */}
       <div className="submission-link-banner-compact">
         <div className="compact-header">
           <ExternalLink size={20} />
@@ -217,7 +338,6 @@ const Dashboard = () => {
         )}
       </div>
 
-      {/* Stats Grid */}
       <div className="stats-grid">
         {stats.map((stat, index) => (
           <div key={index} className={`stat-card stat-${stat.color}`}>
@@ -240,7 +360,6 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* Recent Submissions */}
       <div className="dashboard-section">
         <div className="section-header">
           <h2>Recent SPP Submissions</h2>
@@ -253,48 +372,20 @@ const Dashboard = () => {
           </button>
         </div>
 
-        <div className="card">
-          {overview?.recent_submissions?.length > 0 ? (
-            <div className="submissions-list">
-              {overview.recent_submissions.map((submission) => (
-                <div
-                  key={submission.id}
-                  className="submission-item"
-                  onClick={() =>
-                    navigate(`/dashboard/submissions/${submission.id}`)
-                  }
-                >
-                  <div className="submission-icon">
-                    <FileText size={20} />
-                  </div>
-                  <div className="submission-details">
-                    <h4>{submission.original_filename}</h4>
-                    <p className="submission-meta">
-                      Student ID: {submission.student_id || 'N/A'}
-                    </p>
-                    <p className="submission-meta">
-                      Date: {new Date(submission.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="submission-status">
-                    <span className={`badge badge-${getStatusColor(submission.status)}`}>
-                      {submission.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <FileText size={48} />
-              <h3>No SPP submissions yet</h3>
-              <p>Waiting for students to submit their Software Project Proposals</p>
-            </div>
-          )}
-        </div>
+        <Card>
+          <Table
+            columns={resultColumns.map(c => ({ header: c.header, key: c.key }))}
+            data={overview?.recent_submissions || []}
+            renderCell={(item, column) => {
+              const colDef = resultColumns.find(c => c.key === column.key);
+              return colDef ? colDef.render(item) : null;
+            }}
+            onRowClick={(item) => navigate(`/dashboard/submissions/${item.id}`)}
+            emptyMessage="No SPP submissions yet"
+          />
+        </Card>
       </div>
 
-      {/* Upcoming Deadlines */}
       <div className="dashboard-section">
         <div className="section-header">
           <h2>Upcoming Deadlines</h2>
@@ -307,94 +398,29 @@ const Dashboard = () => {
           </button>
         </div>
 
-        <div className="card">
-          {overview?.upcoming_deadlines?.length > 0 ? (
-            <div className="deadlines-list">
-              {overview.upcoming_deadlines.map((deadline) => (
-                <div
-                  key={deadline.id}
-                  className="deadline-item"
-                  onClick={() => navigate('/dashboard/submissions', { state: { deadlineId: deadline.id } })}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className="deadline-icon">
-                    <Calendar size={20} />
-                  </div>
-                  <div className="deadline-details">
-                    <h4>{deadline.title}</h4>
-                    <p className="deadline-meta">
-                      {new Date(deadline.deadline_datetime).toLocaleDateString()} •{' '}
-                      {deadline.submission_count || 0} submissions
-                    </p>
-                  </div>
-                  <div className="deadline-time">
-                    <span className="time-remaining">
-                      {getTimeRemaining(deadline.deadline_datetime)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <Calendar size={48} />
-              <h3>No upcoming deadlines</h3>
-              <p>Create a deadline to track submissions</p>
-              <button
-                className="btn btn-secondary mt-md"
-                onClick={() => navigate('/dashboard/deadlines')}
-              >
-                Create Deadline
-              </button>
-            </div>
-          )}
-        </div>
+        <Card>
+          <Table
+            columns={deadlineColumns.map(c => ({ header: c.header, key: c.key }))}
+            data={overview?.upcoming_deadlines || []}
+            renderCell={(item, column) => {
+              const colDef = deadlineColumns.find(c => c.key === column.key);
+              return colDef ? colDef.render(item) : null;
+            }}
+            onRowClick={(item) => navigate('/dashboard/submissions', { state: { deadlineId: item.id } })}
+            emptyMessage="No upcoming deadlines"
+          />
+        </Card>
       </div>
 
-      {/* Error Modal */}
-      {showErrorModal && (
-        <div className="modal-overlay" onClick={() => setShowErrorModal(false)}>
-          <div className="modal-content error-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="error-icon">
-                <AlertCircle size={48} />
-              </div>
-              <h2>{errorMessage.title}</h2>
-              <button className="btn-close" onClick={() => setShowErrorModal(false)}>
-                ×
-              </button>
-            </div>
-
-            <div className="modal-body">
-              <p>{errorMessage.body}</p>
-            </div>
-
-            <div className="modal-footer">
-              {errorMessage.title === 'No Deadline Found' ? (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => {
-                    setShowErrorModal(false);
-                    navigate('/dashboard/deadlines');
-                  }}
-                >
-                  <Calendar size={18} />
-                  Go to Deadline Management
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => setShowErrorModal(false)}
-                >
-                  OK
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        isOpen={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        title={errorMessage.title}
+        type="error"
+        footer={modalFooter}
+      >
+        <p>{errorMessage.body}</p>
+      </Modal>
     </div>
   );
 };

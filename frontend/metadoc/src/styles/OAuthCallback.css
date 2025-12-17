@@ -12,20 +12,21 @@
   max-width: 500px;
 }
 
-.callback-card {
-  background: white;
-  border-radius: 16px;
-  padding: 3rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+.callback-card-content {
   text-align: center;
   animation: slideUp 0.5s ease-out;
+  padding: 3rem !important;
+  /* Override default card padding if needed */
 }
+
+
 
 @keyframes slideUp {
   from {
     opacity: 0;
     transform: translateY(30px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -46,6 +47,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -59,19 +61,7 @@
   color: var(--error-red);
 }
 
-.callback-card h2 {
-  font-size: 1.75rem;
-  color: var(--text-primary);
-  margin-bottom: 0.75rem;
-  font-weight: 600;
-}
 
-.callback-card p {
-  color: var(--text-secondary);
-  font-size: 1rem;
-  line-height: 1.6;
-  margin-bottom: 0.5rem;
-}
 
 .redirect-text {
   font-size: 0.875rem;

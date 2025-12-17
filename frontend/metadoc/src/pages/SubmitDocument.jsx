@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { submissionAPI } from '../services/api';
-import { Upload, Link as LinkIcon, FileText, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { Upload, Link as LinkIcon, FileText, CheckCircle, AlertCircle, X, Check } from 'lucide-react';
+import Card from '../components/common/Card/Card';
+import Input from '../components/common/Input/Input';
+import Button from '../components/common/Button/Button';
 import '../styles/SubmitDocument.css';
 
 const SubmitDocument = () => {
   const [activeTab, setActiveTab] = useState('upload'); // 'upload' or 'drive'
   const [loading, setLoading] = useState(false);
+  const [validating, setValidating] = useState(false);
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState(null);
 
@@ -52,6 +56,16 @@ const SubmitDocument = () => {
       setFile(selectedFile);
       setError(null);
     }
+  };
+
+  const handleRemoveFile = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFile(null);
+    setError(null);
+    // Reset file input
+    const fileInput = document.getElementById('file-input');
+    if (fileInput) fileInput.value = '';
   };
 
   const handleUploadSubmit = async (e) => {
@@ -115,7 +129,7 @@ const SubmitDocument = () => {
       return;
     }
 
-    setLoading(true);
+    setValidating(true);
     setLinkValidation(null);
     setError(null);
 
@@ -136,7 +150,7 @@ const SubmitDocument = () => {
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to validate link');
     } finally {
-      setLoading(false);
+      setValidating(false);
     }
   };
 
@@ -201,7 +215,7 @@ const SubmitDocument = () => {
 
   return (
     <div className="submit-page">
-      <div className="submit-container">
+      <Card className="submit-container">
         <div className="submit-header">
           <h2>Submit Your Document</h2>
           <p>Upload a DOCX file or provide a Google Drive link for analysis</p>
@@ -246,15 +260,15 @@ const SubmitDocument = () => {
 
         <div className="submit-content">
           {activeTab === 'upload' ? (
-            <div className="card">
+            <>
               <div className="card-header">
                 <h3 className="card-title">Upload Document</h3>
-                <p className="card-description">
+                <p className="text-gray-600 text-sm">
                   Upload a DOCX or DOC file (max 50MB)
                 </p>
               </div>
 
-              <form onSubmit={handleUploadSubmit}>
+              <form onSubmit={handleUploadSubmit} className="flex flex-col gap-4">
                 <div className="file-upload-area">
                   <input
                     type="file"
@@ -265,7 +279,28 @@ const SubmitDocument = () => {
                   />
                   <label htmlFor="file-input" className="file-upload-label">
                     {file ? (
-                      <div className="file-selected">
+                      <div className="file-selected" style={{ position: 'relative' }}>
+                        <button
+                          type="button"
+                          onClick={handleRemoveFile}
+                          style={{
+                            position: 'absolute',
+                            top: '8px',
+                            right: '8px',
+                            background: 'white',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '50%',
+                            padding: '4px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                          }}
+                          aria-label="Remove file"
+                        >
+                          <X size={16} color="#6b7280" />
+                        </button>
                         <FileText size={48} />
                         <p className="file-name">{file.name}</p>
                         <p className="file-size">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
@@ -280,31 +315,23 @@ const SubmitDocument = () => {
                   </label>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Full Name</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={uploadData.student_name}
-                    onChange={(e) =>
-                      setUploadData({ ...uploadData, student_name: e.target.value })
-                    }
-                    placeholder="e.g., Juan Dela Cruz"
-                  />
-                </div>
+                <Input
+                  label="Full Name"
+                  value={uploadData.student_name}
+                  onChange={(e) =>
+                    setUploadData({ ...uploadData, student_name: e.target.value })
+                  }
+                  placeholder="e.g., Juan Dela Cruz"
+                />
 
-                <div className="form-group">
-                  <label className="form-label">Student ID Number</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={uploadData.student_id}
-                    onChange={(e) =>
-                      setUploadData({ ...uploadData, student_id: e.target.value })
-                    }
-                    placeholder="e.g., 22-1686-452"
-                  />
-                </div>
+                <Input
+                  label="Student ID Number"
+                  value={uploadData.student_id}
+                  onChange={(e) =>
+                    setUploadData({ ...uploadData, student_id: e.target.value })
+                  }
+                  placeholder="e.g., 22-1686-452"
+                />
 
                 {error && typeof error === 'string' && (
                   <div className="alert alert-error">
@@ -313,54 +340,68 @@ const SubmitDocument = () => {
                   </div>
                 )}
 
-                <button
+                <Button
                   type="submit"
-                  className="btn btn-primary btn-lg"
-                  disabled={loading || !file}
+                  size="medium"
+                  loading={loading}
+                  disabled={!file}
+                  icon={Upload}
+                  className="w-full"
                 >
-                  {loading ? (
-                    <>
-                      <Loader size={20} className="spinner-icon" />
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={20} />
-                      Upload Document
-                    </>
-                  )}
-                </button>
+                  Upload Document
+                </Button>
               </form>
-            </div>
+            </>
           ) : (
-            <div className="card">
-              <div className="card-header">
-                <h3 className="card-title">Google Drive Link</h3>
-                <p className="card-description">
+            <>
+              <div className="card-header flex items-baseline gap-2">
+                <h3 className="card-title text-maroon" style={{ color: 'var(--color-maroon)', fontSize: '1.1rem', margin: 0 }}>Google Drive Link</h3>
+                <p className="text-gray-600 text-sm" style={{ margin: 0 }}>
                   Provide a link to your Google Docs or DOCX file
                 </p>
               </div>
 
-              <form onSubmit={handleDriveLinkSubmit}>
+              <form onSubmit={handleDriveLinkSubmit} className="flex flex-col gap-4">
                 <div className="form-group">
-                  <label className="form-label">Google Drive Link</label>
-                  <div className="input-with-button">
+                  <label className="form-label">GOOGLE DRIVE LINK</label>
+                  <div style={{ position: 'relative' }}>
                     <input
                       type="url"
-                      className="form-input"
+                      name="drive_link"
                       value={driveData.drive_link}
                       onChange={(e) =>
                         setDriveData({ ...driveData, drive_link: e.target.value })
                       }
                       placeholder="https://drive.google.com/file/d/..."
+                      className="form-input w-full"
+                      style={{ paddingRight: '3rem' }} // Space for the button
+                      required
                     />
                     <button
                       type="button"
-                      className="btn btn-secondary btn-sm"
                       onClick={handleValidateLink}
-                      disabled={loading || !driveData.drive_link}
+                      disabled={!driveData.drive_link || validating}
+                      className="flex items-center justify-center transition-colors"
+                      style={{
+                        position: 'absolute',
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        backgroundColor: 'var(--color-gold)',
+                        width: '3rem',
+                        borderTopRightRadius: 'var(--radius-md)',
+                        borderBottomRightRadius: 'var(--radius-md)',
+                        border: '1px solid var(--color-gray-300)',
+                        borderLeft: 'none',
+                        cursor: (!driveData.drive_link || validating) ? 'not-allowed' : 'pointer',
+                        opacity: (!driveData.drive_link || validating) ? 0.7 : 1
+                      }}
                     >
-                      Validate
+                      {validating ? (
+                        <div className="btn-spinner" style={{ color: 'var(--color-maroon)' }}></div>
+                      ) : (
+                        <Check size={20} color="var(--color-maroon)" strokeWidth={3} />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -393,31 +434,27 @@ const SubmitDocument = () => {
                   </div>
                 )}
 
-                <div className="form-group">
-                  <label className="form-label">Full Name</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={driveData.student_name}
-                    onChange={(e) =>
-                      setDriveData({ ...driveData, student_name: e.target.value })
-                    }
-                    placeholder="e.g., Juan Dela Cruz"
-                  />
-                </div>
+                <Input
+                  label="FULL NAME"
+                  value={driveData.student_name}
+                  onChange={(e) =>
+                    setDriveData({ ...driveData, student_name: e.target.value })
+                  }
+                  placeholder="e.g., Juan Dela Cruz"
+                  labelClassName="uppercase-label" // If Input supports custom label class or just style via global CSS
+                />
 
-                <div className="form-group">
-                  <label className="form-label">Student ID Number</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={driveData.student_id}
-                    onChange={(e) =>
-                      setDriveData({ ...driveData, student_id: e.target.value })
-                    }
-                    placeholder="e.g., 22-1686-452"
-                  />
-                </div>
+                {/* Apply style to FORCE uppercase labels if component doesn't separate it well, 
+                    or just pass uppercase string which I did above. */}
+
+                <Input
+                  label="STUDENT ID NUMBER"
+                  value={driveData.student_id}
+                  onChange={(e) =>
+                    setDriveData({ ...driveData, student_id: e.target.value })
+                  }
+                  placeholder="e.g., 22-1686-452"
+                />
 
                 {error && typeof error === 'object' && (
                   <div className="alert alert-error">
@@ -442,29 +479,23 @@ const SubmitDocument = () => {
                   </div>
                 )}
 
-                <button
+                <Button
                   type="submit"
-                  className="btn btn-primary btn-lg"
-                  disabled={loading || !driveData.drive_link}
+                  size="medium"
+                  loading={loading}
+                  disabled={!driveData.drive_link}
+                  icon={LinkIcon}
+                  className="w-full"
                 >
-                  {loading ? (
-                    <>
-                      <Loader size={20} className="spinner-icon" />
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <LinkIcon size={20} />
-                      Submit Link
-                    </>
-                  )}
-                </button>
+                  Submit Link
+                </Button>
               </form>
-            </div>
+            </>
           )}
         </div>
-      </div>
+      </Card>
     </div>
+
   );
 };
 

@@ -2,10 +2,11 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import DashboardLayout from './components/Layout/DashboardLayout';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import OAuthCallback from './pages/OAuthCallback';
 import SubmitDocument from './pages/SubmitDocument';
 import Dashboard from './pages/Dashboard';
-import Files from './pages/Files';
+import Folder from './pages/Folder';
 import SubmissionDetail from './pages/SubmissionDetail';
 import Deadlines from './pages/Deadlines';
 import './App.css';
@@ -54,6 +55,14 @@ function App() {
               </PublicRoute>
             }
           />
+          <Route
+            path="/register"
+            element={
+              <PublicRoute>
+                <Register />
+              </PublicRoute>
+            }
+          />
           <Route path="/submit" element={<SubmitDocument />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="/auth/callback" element={<OAuthCallback />} />
@@ -70,11 +79,11 @@ function App() {
             }
           />
           <Route
-            path="/dashboard/Files"
+            path="/dashboard/folders"
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <Files />
+                  <Folder />
                 </DashboardLayout>
               </ProtectedRoute>
             }
@@ -84,7 +93,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <Files />
+                  <Folder />
                 </DashboardLayout>
               </ProtectedRoute>
             }

@@ -419,8 +419,92 @@ textarea.form-control {
   background-color: #dc2626;
 }
 
+/* Controls Bar */
+.deadlines-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+
+.search-wrapper {
+  position: relative;
+  flex: 1;
+  max-width: 400px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-gray-400);
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--color-maroon);
+  box-shadow: 0 0 0 3px rgba(128, 0, 32, 0.1);
+}
+
+.sort-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.sort-label {
+  color: var(--color-gray-600);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.sort-select {
+  padding: 0.5rem 2rem 0.5rem 1rem;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  color: var(--color-gray-700);
+  background-color: white;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  appearance: none;
+}
+
+.sort-select:focus {
+  outline: none;
+  border-color: var(--color-maroon);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
+  .deadlines-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-wrapper {
+    max-width: 100%;
+  }
+
+  .sort-wrapper {
+    justify-content: space-between;
+  }
+
   .deadlines-header {
     flex-direction: column;
     align-items: flex-start;
@@ -444,4 +528,64 @@ textarea.form-control {
   .delete-modal .modal-footer .btn {
     width: 100%;
   }
+}
+
+/* Success Modal - Compact */
+.success-modal {
+  max-width: 400px;
+}
+
+.success-modal .modal-header {
+  flex-direction: row;
+  align-items: center;
+  text-align: left;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-gray-200);
+  gap: var(--spacing-sm);
+}
+
+.success-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.success-icon svg {
+  color: var(--color-success);
+}
+
+.success-modal .modal-header h2 {
+  color: var(--color-success);
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.success-modal .modal-body {
+  padding: var(--spacing-md) var(--spacing-lg);
+  text-align: left;
+}
+
+.success-modal .modal-body p {
+  color: var(--color-gray-700);
+  line-height: 1.5;
+  margin-bottom: var(--spacing-xs);
+  font-size: 0.875rem;
+}
+
+.success-modal .modal-footer {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--color-gray-200);
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+.success-modal .modal-footer .btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
 }

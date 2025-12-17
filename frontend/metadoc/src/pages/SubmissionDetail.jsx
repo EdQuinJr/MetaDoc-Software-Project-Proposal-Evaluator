@@ -13,6 +13,8 @@ import {
   CheckCircle,
   TrendingUp,
 } from 'lucide-react';
+import Card from '../components/common/Card/Card';
+import Badge from '../components/common/Badge/Badge';
 import '../styles/SubmissionDetail.css';
 
 const SubmissionDetail = () => {
@@ -26,10 +28,14 @@ const SubmissionDetail = () => {
     fetchSubmissionDetail();
   }, [id]);
 
+  /* Ensure loading state lasts at least 2 seconds */
   const fetchSubmissionDetail = async () => {
     try {
       setLoading(true);
-      const response = await dashboardAPI.getSubmissionDetail(id);
+      const [response] = await Promise.all([
+        dashboardAPI.getSubmissionDetail(id),
+        new Promise(resolve => setTimeout(resolve, 1200))
+      ]);
       setSubmission(response.data);
     } catch (err) {
       setError('Failed to load submission details');
@@ -53,40 +59,38 @@ const SubmissionDetail = () => {
       <div className="detail-error">
         <AlertCircle size={48} />
         <h3>{error || 'Submission not found'}</h3>
-        <button className="btn btn-primary" onClick={() => navigate('/dashboard/submissions')}>
-          Back to SPP Files
+        <button className="btn btn-primary" onClick={() => navigate('/dashboard/folders')}>
+          Back to Folders
         </button>
       </div>
     );
   }
 
+  const handleBack = () => {
+    navigate(-1);
+  };
+
   const analysis = submission.analysis_result;
 
   return (
     <div className="detail-page">
-      <button className="btn btn-ghost mb-lg" onClick={() => navigate('/dashboard/submissions')}>
+      <button className="btn btn-ghost mb-lg" onClick={handleBack}>
         <ArrowLeft size={20} />
-        Back to SPP Files
+        Back
       </button>
 
       <div className="detail-header">
         <div className="detail-title-section">
-          <h1>{submission.original_filename}</h1>
-          <span className={`badge badge-${getStatusColor(submission.status)}`}>
+          <h1 className="text-3xl font-bold text-gray-900">{submission.original_filename}</h1>
+          <Badge variant={getStatusColor(submission.status)}>
             {submission.status}
-          </span>
+          </Badge>
         </div>
       </div>
 
       <div className="detail-grid">
         {/* Basic Information */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title">
-              <FileText size={20} />
-              Basic Information
-            </h3>
-          </div>
+        <Card title="Basic Information" className="h-full">
           <div className="info-grid">
             <div className="info-item">
               <span className="info-label">Student Name</span>
@@ -123,17 +127,11 @@ const SubmissionDetail = () => {
               <span className="info-value font-mono">{submission.job_id}</span>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Content Statistics */}
         {analysis?.content_statistics && (
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title">
-                <BarChart3 size={20} />
-                Content Statistics
-              </h3>
-            </div>
+          <Card title="Content Statistics" className="h-full">
             <div className="stats-list">
               <div className="stat-item">
                 <span className="stat-label">Word Count</span>
@@ -152,19 +150,13 @@ const SubmissionDetail = () => {
                 <span className="stat-number">{analysis.content_statistics?.estimated_pages || 0}</span>
               </div>
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Document Metadata */}
         {analysis?.document_metadata && (
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title">
-                <User size={20} />
-                Document Metadata
-              </h3>
-            </div>
-            <div className="info-grid">
+          <Card title="Document Metadata" className="h-full">
+            <div className="info-grid mb-6">
               <div className="info-item">
                 <span className="info-label">Author</span>
                 <span className="info-value">
@@ -208,7 +200,7 @@ const SubmissionDetail = () => {
             </div>
 
             {/* Group Members / Contributors */}
-            <div className="card-section">
+            <div className="pt-6 border-t border-gray-100">
               <h4 className="section-subtitle">
                 <User size={16} />
                 Group Members / Contributors
@@ -219,14 +211,7 @@ const SubmissionDetail = () => {
 
                   // Use backend provided contributors list if available
                   if (analysis.document_metadata.contributors && analysis.document_metadata.contributors.length > 0) {
-                    contributors = analysis.document_metadata.contributors.map(c => ({
-                      name: c.name,
-                      role: c.role,
-                      date: c.email // Temporary hack: backend doesn't send dates for generic contributors yet, or use creation date fallback
-                    }));
-                    // Actually, let's keep it simple. If backend has it, use it.
-                    // Ensure dates are attached if possible, or fallback to main doc dates
-                    contributors = analysis.document_metadata.contributors;
+                    contributors = analysis.document_metadata.contributors; // Assume simple shape for now
                   } else {
                     // Fallback logic
                     // Add author with creation date
@@ -258,17 +243,17 @@ const SubmissionDetail = () => {
                         <div className="contributor-details">
                           <div className="contributor-name">
                             <strong>{contributor.name}</strong>
-                            <span className="contributor-role">({contributor.role})</span>
+                            <span className="contributor-role">({contributor.role || 'Contributor'})</span>
                           </div>
-                          {contributor.date && (
+                          {(contributor.date || contributor.email) && (
                             <div className="contributor-date">
-                              {new Date(contributor.date).toLocaleString([], {
+                              {contributor.date && !isNaN(Date.parse(contributor.date)) ? new Date(contributor.date).toLocaleString([], {
                                 year: 'numeric',
                                 month: 'numeric',
                                 day: 'numeric',
                                 hour: 'numeric',
                                 minute: '2-digit',
-                              })}
+                              }) : contributor.email}
                             </div>
                           )}
                         </div>
@@ -280,27 +265,21 @@ const SubmissionDetail = () => {
                 })()}
               </div>
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Heuristic Insights */}
         {analysis?.heuristic_insights && (
-          <div className="card card-full-width">
-            <div className="card-header">
-              <h3 className="card-title">
-                <TrendingUp size={20} />
-                Heuristic Insights
-              </h3>
-            </div>
+          <Card title="Heuristic Insights" className="card-full-width">
             <div className="insights-grid">
               {analysis.timeliness_classification && (
                 <div className="insight-card">
                   <Clock size={24} className="insight-icon" />
                   <div>
                     <h4>Timeliness</h4>
-                    <span className={`badge badge-${getTimelinessColor(analysis.timeliness_classification)}`}>
+                    <Badge variant={getTimelinessColor(analysis.timeliness_classification)}>
                       {formatTimeliness(analysis.timeliness_classification)}
-                    </span>
+                    </Badge>
                   </div>
                 </div>
               )}
@@ -316,18 +295,12 @@ const SubmissionDetail = () => {
                 </div>
               )}
             </div>
-          </div>
+          </Card>
         )}
 
         {/* NLP Analysis */}
         {analysis?.nlp_results && (
-          <div className="card card-full-width">
-            <div className="card-header">
-              <h3 className="card-title">
-                <BookOpen size={20} />
-                NLP Analysis
-              </h3>
-            </div>
+          <Card title="NLP Analysis" className="card-full-width">
             <div className="nlp-grid">
               {analysis.flesch_kincaid_score !== null && (
                 <div className="nlp-card">
@@ -369,28 +342,19 @@ const SubmissionDetail = () => {
                 </div>
               )}
             </div>
-          </div>
+          </Card>
         )}
 
         {/* AI Summary */}
         {analysis?.ai_summary && (
-          <div className="card card-full-width">
-            <div className="card-header">
-              <h3 className="card-title">AI-Generated Summary</h3>
-            </div>
+          <Card title="AI-Generated Summary" className="card-full-width">
             <p className="ai-summary">{analysis.ai_summary}</p>
-          </div>
+          </Card>
         )}
 
         {/* Validation Warnings */}
         {analysis?.validation_warnings && analysis.validation_warnings.length > 0 && (
-          <div className="card card-full-width">
-            <div className="card-header">
-              <h3 className="card-title">
-                <AlertCircle size={20} />
-                Validation Warnings
-              </h3>
-            </div>
+          <Card title="Validation Warnings" className="card-full-width">
             <div className="warnings-list">
               {analysis.validation_warnings.map((warning, index) => (
                 <div key={index} className="warning-item">
@@ -399,7 +363,7 @@ const SubmissionDetail = () => {
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
         )}
       </div>
     </div>

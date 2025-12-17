@@ -28,7 +28,7 @@ const DashboardLayout = ({ children }) => {
 
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
-    { path: '/dashboard/Files', icon: FileText, label: 'Files' },
+    { path: '/dashboard/folders', icon: FileText, label: 'Folders' },
     { path: '/dashboard/deadlines', icon: Calendar, label: 'Deadlines' },
     { path: '/dashboard/reports', icon: FileBarChart, label: 'Reports' },
   ];
