@@ -7,16 +7,11 @@ Main application factory and initialization.
 import os
 import logging
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from flask_cors import CORS
-from flask_jwt_extended import JWTManager
 from config import config
 
-# Initialize extensions
-db = SQLAlchemy()
-migrate = Migrate()
-jwt = JWTManager()
+# Import core extensions
+from app.core.extensions import db, migrate, jwt, init_extensions
+from app.core.exceptions import MetaDocException
 
 def create_app(config_name=None):
     """Application factory pattern"""
@@ -29,19 +24,8 @@ def create_app(config_name=None):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
     
-    # Initialize extensions
-    db.init_app(app)
-    migrate.init_app(app, db)
-    jwt.init_app(app)
-    
-    # Enable CORS for frontend integration
-    CORS(app, resources={
-        r"/api/*": {
-            "origins": ["http://localhost:3000", "http://localhost:5173"],
-            "methods": ["GET", "POST", "PUT", "DELETE"],
-            "allow_headers": ["Content-Type", "Authorization"]
-        }
-    })
+    # Initialize extensions using core module
+    init_extensions(app)
     
     # Setup logging
     setup_logging(app)
@@ -91,42 +75,57 @@ def create_directories(app):
         if not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
             app.logger.info(f'Created directory: {directory}')
+    
+    # Ensure database directory exists for SQLite
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    if db_uri.startswith('sqlite:///'):
+        db_path = db_uri.replace('sqlite:///', '')
+        db_dir = os.path.dirname(db_path)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+            app.logger.info(f'Created database directory: {db_dir}')
 
 def register_blueprints(app):
     """Register application blueprints"""
     
-    # Module 1: File Submission and Retrieval
-    from app.modules.submission import submission_bp
-    app.register_blueprint(submission_bp, url_prefix='/api/v1/submission')
-    
-    # Module 2: Metadata Extraction
-    from app.modules.metadata import metadata_bp
-    app.register_blueprint(metadata_bp, url_prefix='/api/v1/metadata')
-    
-    # Module 3: Rule-Based Insights
-    from app.modules.insights import insights_bp
-    app.register_blueprint(insights_bp, url_prefix='/api/v1/insights')
-    
-    # Module 4: NLP Analysis
-    # Temporarily disabled - requires spacy which needs Visual C++ Build Tools
-    # from app.modules.nlp import nlp_bp
-    # app.register_blueprint(nlp_bp, url_prefix='/api/v1/nlp')
-    
-    # Module 5: Dashboard and Authentication
-    from app.modules.dashboard import dashboard_bp
-    app.register_blueprint(dashboard_bp, url_prefix='/api/v1/dashboard')
-    
     # Authentication
-    from app.modules.auth import auth_bp
+    from app.api.auth import auth_bp
     app.register_blueprint(auth_bp, url_prefix='/api/v1/auth')
     
+    # File Submission and Retrieval
+    from app.api.submission import submission_bp
+    app.register_blueprint(submission_bp, url_prefix='/api/v1/submission')
+    
+    # Dashboard
+    from app.api.dashboard import dashboard_bp
+    app.register_blueprint(dashboard_bp, url_prefix='/api/v1/dashboard')
+    
+    # Metadata Extraction
+    from app.api.metadata import metadata_bp
+    app.register_blueprint(metadata_bp, url_prefix='/api/v1/metadata')
+    
+    # Rule-Based Insights
+    from app.api.insights import insights_bp
+    app.register_blueprint(insights_bp, url_prefix='/api/v1/insights')
+    
+    # NLP Analysis (temporarily disabled - requires spacy)
+    # from app.api.nlp import nlp_bp
+    # app.register_blueprint(nlp_bp, url_prefix='/api/v1/nlp')
+    
     # Reports
-    from app.modules.reports import reports_bp
+    from app.api.reports import reports_bp
     app.register_blueprint(reports_bp, url_prefix='/api/v1/reports')
 
 def register_error_handlers(app):
     """Register error handlers"""
     
+    # Handle custom MetaDoc exceptions
+    @app.errorhandler(MetaDocException)
+    def handle_metadoc_exception(error):
+        response = error.to_dict()
+        return response, error.status_code
+    
+    # Handle standard HTTP errors
     @app.errorhandler(404)
     def not_found_error(error):
         return {'error': 'Resource not found'}, 404

@@ -5,6 +5,16 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Get backend directory path
+_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Configure database URL
+_DB_URL = os.environ.get('DATABASE_URL')
+if not _DB_URL:
+    # Default to SQLite in backend directory with absolute path
+    _db_path = os.path.join(_BACKEND_DIR, 'metadoc.db')
+    _DB_URL = f'sqlite:///{_db_path}'
+
 class Config:
     """Base configuration class"""
     
@@ -14,7 +24,7 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     
     # Database Configuration
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///metadoc.db'
+    SQLALCHEMY_DATABASE_URI = _DB_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False
     
