@@ -27,265 +27,18 @@ import magic
 import uuid
 
 from app.core.extensions import db
-from app.models import Submission, SubmissionStatus, AuditLog
-from app.services.validation_service import ValidationService
+from app.models import Submission, SubmissionToken, SubmissionStatus, Deadline
 from app.services.audit_service import AuditService
+from app.services import SubmissionService, DriveService
+from app.api.auth import get_auth_service
+from app.schemas.dto import SubmissionDTO, SubmissionTokenDTO
 from app.utils.file_utils import FileUtils
 
 submission_bp = Blueprint('submission', __name__)
 
-class SubmissionService:
-    """Service class for handling file submissions and Google Drive integration"""
-    
-    def __init__(self):
-        self.allowed_extensions = {'docx', 'doc'}
-        self.allowed_mime_types = {
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/msword',
-            'application/vnd.google-apps.document',
-            'application/zip'  # DOCX files are ZIP archives
-        }
-    
-    @property
-    def max_file_size(self):
-        """Get max file size from config (lazy load)"""
-        return current_app.config.get('MAX_CONTENT_LENGTH', 50 * 1024 * 1024)
-        
-    def _get_drive_service(self):
-        """Initialize Google Drive API service"""
-        try:
-            credentials = service_account.Credentials.from_service_account_file(
-                current_app.config['GOOGLE_SERVICE_ACCOUNT_FILE'],
-                scopes=['https://www.googleapis.com/auth/drive.readonly']
-            )
-            return build('drive', 'v3', credentials=credentials)
-        except Exception as e:
-            current_app.logger.error(f"Failed to initialize Google Drive service: {e}")
-            raise Exception("Google Drive service unavailable")
-    
-    def validate_file(self, file):
-        """Validate uploaded file according to SRS requirements"""
-        errors = []
-        
-        # Check file size
-        if len(file.read()) > self.max_file_size:
-            errors.append(f"File size exceeds maximum limit of {self.max_file_size // (1024*1024)}MB")
-        
-        # Reset file pointer
-        file.seek(0)
-        
-        # Check file extension
-        filename = secure_filename(file.filename)
-        if '.' not in filename or filename.rsplit('.', 1)[1].lower() not in self.allowed_extensions:
-            errors.append("Unsupported file type. Only DOCX and DOC files are allowed.")
-        
-        # Check MIME type using python-magic for accuracy
-        file_content = file.read(1024)  # Read first 1KB for MIME detection
-        file.seek(0)  # Reset pointer
-        
-        try:
-            mime_type = magic.from_buffer(file_content, mime=True)
-            # DOCX files are often detected as application/zip, so check extension too
-            if mime_type not in self.allowed_mime_types:
-                # If it's a ZIP file, verify it's actually a DOCX by checking extension
-                if mime_type == 'application/zip' and filename.endswith('.docx'):
-                    pass  # Valid DOCX file
-                else:
-                    errors.append(f"Invalid file format. Detected: {mime_type}")
-        except Exception as e:
-            current_app.logger.warning(f"MIME type detection failed: {e}")
-            # Fallback to filename-based validation
-        
-        return errors
-    
-    def validate_drive_link(self, drive_link):
-        """Validate Google Drive link format and extract file ID"""
-        import re
-        
-        # Google Drive link patterns
-        patterns = [
-            r'https://drive\.google\.com/file/d/([a-zA-Z0-9-_]+)',
-            r'https://docs\.google\.com/document/d/([a-zA-Z0-9-_]+)',
-            r'https://drive\.google\.com/open\?id=([a-zA-Z0-9-_]+)'
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, drive_link)
-            if match:
-                return match.group(1), None
-        
-        return None, "Invalid Google Drive link format"
-    
-    def get_drive_file_metadata(self, file_id):
-        """Get file metadata from Google Drive"""
-        try:
-            service = self._get_drive_service()
-            
-            # Get file metadata
-            metadata = service.files().get(
-                fileId=file_id,
-                fields='id,name,mimeType,size,createdTime,modifiedTime,owners,lastModifyingUser,permissions'
-            ).execute()
-            
-            return metadata, None
-            
-        except HttpError as e:
-            error_details = e.error_details[0] if e.error_details else {}
-            
-            if e.resp.status == 403:
-                if 'insufficientPermissions' in str(e) or 'permissionDenied' in str(e):
-                    return None, {
-                        'error_type': 'permission_denied',
-                        'message': 'Insufficient permissions to access the file',
-                        'guidance': self._get_permission_guidance()
-                    }
-            elif e.resp.status == 404:
-                return None, {
-                    'error_type': 'file_not_found',
-                    'message': 'File not found or not accessible'
-                }
-            
-            current_app.logger.error(f"Google Drive API error: {e}")
-            return None, {
-                'error_type': 'api_error',
-                'message': 'Failed to access Google Drive'
-            }
-        
-        except Exception as e:
-            current_app.logger.error(f"Unexpected error accessing Drive file: {e}")
-            return None, {
-                'error_type': 'unknown_error',
-                'message': 'Unexpected error occurred'
-            }
-    
-    def download_drive_file(self, file_id, filename, mime_type=None):
-        """Download file from Google Drive to temporary storage"""
-        try:
-            service = self._get_drive_service()
-            
-            # For Google Docs (based on mime_type), export as DOCX
-            if mime_type == 'application/vnd.google-apps.document' or filename.endswith('.gdoc'):
-                request_obj = service.files().export_media(
-                    fileId=file_id,
-                    mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                )
-                if not filename.endswith('.docx'):
-                   filename = filename.replace('.gdoc', '.docx') if filename.endswith('.gdoc') else filename + '.docx'
-            else:
-                # For regular files, download as-is
-                request_obj = service.files().get_media(fileId=file_id)
-            
-            # Execute download
-            file_content = request_obj.execute()
-            
-            # Save to temporary storage
-            temp_path = os.path.join(current_app.config['TEMP_STORAGE_PATH'], filename)
-            with open(temp_path, 'wb') as f:
-                f.write(file_content)
-            
-            return temp_path, None
-            
-        except HttpError as e:
-            current_app.logger.error(f"Failed to download Drive file: {e}")
-            return None, f"Failed to download file: {e}"
-        
-        except Exception as e:
-            current_app.logger.error(f"Unexpected error downloading file: {e}")
-            return None, f"Unexpected error: {e}"
-    
-    def _get_permission_guidance(self):
-        """Return guidance for fixing Google Drive permissions"""
-        return {
-            'steps': [
-                "1. Open your Google Drive file",
-                "2. Click the 'Share' button (top-right corner)",
-                "3. Change access to 'Anyone with the link'",
-                "4. Set permissions to 'Viewer' or 'Commenter'",
-                "5. Copy the new link and resubmit"
-            ],
-            'help_url': '/help/drive-permissions'
-        }
-    
-    def calculate_file_hash(self, file_path):
-        """Calculate SHA-256 hash of file for integrity checking"""
-        hash_sha256 = hashlib.sha256()
-        with open(file_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                hash_sha256.update(chunk)
-        return hash_sha256.hexdigest()
-    
-    def check_duplicate_submission(self, file_hash=None, drive_link=None, professor_id=None, deadline_id=None):
-        """
-        Check if a file has already been submitted
-        
-        Args:
-            file_hash: SHA-256 hash of the file
-            drive_link: Google Drive link (if applicable)
-            professor_id: Professor ID to scope the check
-            deadline_id: Deadline ID to scope the check (optional)
-        
-        Returns:
-            tuple: (is_duplicate: bool, existing_submission: Submission or None)
-        """
-        query = Submission.query
-        
-        # Check by file hash (for both uploads and drive links)
-        if file_hash:
-            query = query.filter_by(file_hash=file_hash)
-        
-        # Check by Google Drive link (for drive link submissions)
-        if drive_link:
-            drive_query = Submission.query.filter_by(google_drive_link=drive_link)
-            if professor_id:
-                drive_query = drive_query.filter_by(professor_id=professor_id)
-            if deadline_id:
-                drive_query = drive_query.filter_by(deadline_id=deadline_id)
-            
-            existing = drive_query.first()
-            if existing:
-                return True, existing
-        
-        # Apply filters for hash-based check
-        if file_hash:
-            if professor_id:
-                query = query.filter_by(professor_id=professor_id)
-            if deadline_id:
-                query = query.filter_by(deadline_id=deadline_id)
-            
-            existing = query.first()
-            if existing:
-                return True, existing
-        
-        return False, None
-    
-    def create_submission_record(self, **kwargs):
-        """Create submission record in database"""
-        submission = Submission(
-            job_id=str(uuid.uuid4()),
-            **kwargs
-        )
-        
-        try:
-            db.session.add(submission)
-            db.session.commit()
-            
-            # Log submission event
-            AuditService.log_event(
-                event_type='submission_created',
-                description=f'New submission created: {submission.job_id}',
-                submission_id=submission.id,
-                metadata={'filename': submission.original_filename}
-            )
-            
-            return submission, None
-            
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Failed to create submission record: {e}")
-            return None, str(e)
-
-# Initialize service
+# Initialize services
 submission_service = SubmissionService()
+drive_service = DriveService()
 
 def validate_submission_token(token):
     """Validate submission token and return token with deadline info"""
@@ -307,15 +60,50 @@ def validate_submission_token(token):
     deadline_id = getattr(token_record, 'deadline_id', None)
     if deadline_id:
         deadline = Deadline.query.filter_by(id=deadline_id).first()
-        if deadline:
-            token_record.deadline_title = deadline.title
-            token_record.deadline_datetime = deadline.deadline_datetime
+        if not deadline:
+            return None, "This submission link is no longer valid. The deadline has been deleted by the professor."
+        
+        token_record.deadline_title = deadline.title
+        token_record.deadline_datetime = deadline.deadline_datetime
     
     # Increment usage count
     token_record.usage_count += 1
     db.session.commit()
     
     return token_record, None
+
+@submission_bp.route('/token-info', methods=['GET'])
+def get_token_info():
+    """Get deadline information from submission token"""
+    try:
+        token = request.args.get('token')
+        if not token:
+            return jsonify({'error': 'Token is required'}), 400
+        
+        token_record, error = validate_submission_token(token)
+        if error:
+            return jsonify({'error': error}), 403
+        
+        # Return deadline information
+        response = {}
+        if hasattr(token_record, 'deadline_title'):
+            response['title'] = token_record.deadline_title
+        if hasattr(token_record, 'deadline_datetime'):
+            response['deadline_datetime'] = token_record.deadline_datetime.isoformat() if token_record.deadline_datetime else None
+        
+        # Get deadline description if available
+        deadline_id = getattr(token_record, 'deadline_id', None)
+        if deadline_id:
+            from app.models import Deadline
+            deadline = Deadline.query.filter_by(id=deadline_id).first()
+            if deadline and deadline.description:
+                response['description'] = deadline.description
+        
+        return jsonify(response), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Token info error: {e}")
+        return jsonify({'error': 'Failed to fetch deadline information'}), 500
 
 @submission_bp.route('/upload', methods=['POST'])
 def upload_file():
@@ -569,7 +357,7 @@ def submit_drive_link():
             return jsonify({'error': validation_error}), 400
         
         # Get file metadata from Google Drive
-        metadata, error = submission_service.get_drive_file_metadata(file_id)
+        metadata, error = drive_service.get_file_metadata(file_id)
         
         if error:
             if error['error_type'] == 'permission_denied':
@@ -593,7 +381,7 @@ def submit_drive_link():
         if not filename.endswith(('.docx', '.doc')):
             filename += '.docx'
         
-        file_path, download_error = submission_service.download_drive_file(file_id, filename, mime_type=metadata['mimeType'])
+        file_path, download_error = drive_service.download_file(file_id, filename, mime_type=metadata['mimeType'])
         
         if download_error:
             return jsonify({'error': download_error}), 500
@@ -851,7 +639,7 @@ def get_submission_status(job_id):
         if not submission:
             return jsonify({'error': 'Submission not found'}), 404
         
-        response_data = submission.to_dict()
+        response_data = SubmissionDTO.serialize(submission, include_analysis=True)
         
         # Include analysis results if available
         if submission.analysis_result:
@@ -912,7 +700,7 @@ def validate_drive_link():
             }), 200
         
         # Check file accessibility
-        metadata, error = submission_service.get_drive_file_metadata(file_id)
+        metadata, error = drive_service.get_file_metadata(file_id)
         
         if error:
             return jsonify({

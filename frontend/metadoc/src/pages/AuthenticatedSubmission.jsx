@@ -6,9 +6,9 @@ import { Upload, Link as LinkIcon, FileText, CheckCircle, AlertCircle, LogOut } 
 import Card from '../components/common/Card/Card';
 import Input from '../components/common/Input/Input';
 import Button from '../components/common/Button/Button';
-import '../styles/StudentSubmit.css';
+import '../styles/AuthenticatedSubmission.css';
 
-const StudentSubmit = () => {
+const AuthenticatedSubmission = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('upload'); // 'upload' or 'drive'
@@ -137,7 +137,7 @@ const StudentSubmit = () => {
 
   if (success) {
     return (
-      <div className="student-submit">
+      <div className="submission-form">
         <div className="success-container">
           <Card className="success-card text-center">
             <CheckCircle size={80} className="success-icon mb-4 mx-auto" style={{ color: 'var(--color-success)' }} />
@@ -160,7 +160,7 @@ const StudentSubmit = () => {
   }
 
   return (
-    <div className="student-submit">
+    <div className="submission-form">
       <header className="submit-header">
         <div className="header-content">
           <div className="logo-section">
@@ -300,4 +300,4 @@ const StudentSubmit = () => {
   );
 };
 
-export default StudentSubmit;
+export default AuthenticatedSubmission;

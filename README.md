@@ -1,23 +1,25 @@
 # MetaDoc: Software Project Proposal Evaluator
 
-MetaDoc is a Google Drive-integrated metadata analyzer for academic document evaluation, designed to enhance the fairness, transparency, and efficiency of academic document assessment within IT and Computer Science programs.
+MetaDoc is a comprehensive document analysis system designed for academic institutions to streamline document submission, metadata extraction, and automated evaluation of student proposals and papers.
 
-## 🏗️ System Overview
+## 🏗️ System Architecture
 
 The system consists of:
-- **Backend API**: Flask-based REST API with Google OAuth2 integration
-- **Frontend**: React application with responsive design
-- **Database**: MySQL/SQLite for data storage
-- **Google Integration**: Drive API and OAuth2 authentication
+- **Backend API**: Flask-based REST API with session-based authentication
+- **Frontend**: React application with Vite and modern UI components
+- **Database**: SQLite (development) / PostgreSQL (production)
+- **Analysis Engine**: Document metadata extraction, NLP analysis, and heuristic evaluation
+- **File Storage**: Local file system with organized directory structure
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - **Python 3.10+** (Tested on Python 3.13)
-- **Node.js 18+**
-- **MySQL Server** (optional - SQLite works for development)
-- **Google Cloud Account** (for OAuth and Drive API)
+- **Node.js 18+** and npm
+- **SQLite** (included with Python)
+- **Git** (for version control)
+- **Windows/Linux/macOS** (cross-platform compatible)
 
 ### Installation
 
@@ -27,9 +29,11 @@ git clone <repository-url>
 cd MetaDoc-Software-Project-Proposal-Evaluator
 ```
 
-2. **Setup Backend** (5 minutes):
+2. **Setup Backend**:
 ```bash
 cd backend
+
+# Create and activate virtual environment
 python -m venv venv
 
 # Windows PowerShell
@@ -38,141 +42,121 @@ python -m venv venv
 # Linux/Mac
 source venv/bin/activate
 
-# Install dependencies (minimal - without NLP)
-pip install -r requirements-minimal.txt
+# Install dependencies
+pip install -r requirements.txt
 
 # Configure environment
 copy .env.example .env  # Windows
 # cp .env.example .env  # Linux/Mac
 
-# Edit .env with your Google OAuth credentials
+# Edit .env file with your settings (see Configuration section)
 
 # Initialize database
-python database_setup.py init
+python scripts/reset_database.py
 
 # Start server
 python run.py
 ```
 
-Backend will be available at: `http://localhost:5000`
+✅ Backend will be available at: `http://localhost:5000`
 
 3. **Setup Frontend**:
 ```bash
 cd frontend/metadoc
+
+# Install dependencies
 npm install
-
-# Configure environment
-copy .env.example .env  # Windows
-# cp .env.example .env  # Linux/Mac
-
-# Edit .env with your settings
 
 # Start development server
 npm run dev
 ```
 
-Frontend will be available at: `http://localhost:3000` or `http://localhost:5173`
+✅ Frontend will be available at: `http://localhost:5173` or `http://localhost:5174`
 
-## 📖 Detailed Setup Guide
+4. **Create Test Account**:
+```bash
+# In backend directory with venv activated
+python scripts/create_test_user.py
+```
 
-For detailed setup instructions, troubleshooting, and configuration options, see:
+Default test credentials:
+- **Email**: `professor@example.com`
+- **Password**: `password`
 
-- **[📘 Complete Setup Instructions](SETUP_INSTRUCTIONS.md)** - Comprehensive guide for team members
-- **[🔧 Backend Documentation](backend/README.md)** - Backend API details
-- **[🎨 Frontend Documentation](frontend/metadoc/README.md)** - Frontend development guide
+## 📖 Detailed Documentation
 
-## 🔑 Google Cloud Setup (Required)
+For more information, see:
 
-### 1. Create Google Cloud Project
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing one
-
-### 2. Enable Required APIs
-
-- Navigate to "APIs & Services" → "Library"
-- Enable these APIs:
-  - **Google Drive API**
-  - **Google OAuth2 API**
-
-### 3. Create OAuth 2.0 Credentials
-
-1. Go to "APIs & Services" → "Credentials"
-2. Click "Create Credentials" → "OAuth 2.0 Client ID"
-3. Choose "Web application"
-4. Add these Authorized redirect URIs:
-   ```
-   http://localhost:5000/auth/google/callback
-   http://127.0.0.1:5000/auth/google/callback
-   ```
-5. Save your **Client ID** and **Client Secret**
-
-### 4. Configure OAuth Consent Screen
-
-1. Go to "APIs & Services" → "OAuth consent screen"
-2. Choose "Internal" (for organization) or "External"
-3. Fill required fields:
-   - App name: "MetaDoc"
-   - User support email: Your email
-   - Developer contact: Your email
+- **[🔧 Backend API Documentation](backend/README.md)** - API endpoints and services
+- **[🎨 Frontend Documentation](frontend/metadoc/README.md)** - Component structure and styling
+- **[📊 Database Schema](backend/app/models/)** - Data models and relationships
 
 ## ⚙️ Configuration
 
-### Backend (.env)
+### Backend Configuration
+
+Create `backend/.env` file:
 
 ```env
-# Database (SQLite for development)
+# Flask Configuration
+FLASK_APP=run.py
+FLASK_ENV=development
+SECRET_KEY=your-secret-key-change-this-in-production
+
+# Database
 DATABASE_URL=sqlite:///metadoc.db
 
-# Google OAuth2 (Required)
-GOOGLE_CLIENT_ID=your_client_id_here.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your_client_secret_here
-GOOGLE_REDIRECT_URI=http://localhost:5000/auth/google/callback
+# File Storage
+UPLOAD_FOLDER=uploads
+TEMP_STORAGE_PATH=temp
+MAX_FILE_SIZE=52428800  # 50MB
 
-# Security
-SECRET_KEY=your_super_secret_key_here
-JWT_SECRET_KEY=your_jwt_secret_key_here
+# CORS Settings
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:5174
 
-# Institution Settings
-ALLOWED_EMAIL_DOMAINS=cit.edu,yourdomain.edu
-INSTITUTION_NAME=Your Institution Name
+# Session Settings
+SESSION_COOKIE_SECURE=False  # Set to True in production with HTTPS
+SESSION_COOKIE_HTTPONLY=True
+SESSION_COOKIE_SAMESITE=Lax
 ```
 
-### Frontend (.env)
+### Frontend Configuration
 
-```env
-VITE_API_BASE_URL=http://localhost:5000/api/v1
-VITE_GOOGLE_CLIENT_ID=your_client_id_here.apps.googleusercontent.com
-```
+The frontend uses Vite proxy configuration (no `.env` needed for development).
 
-## 🎯 Features
+See `frontend/metadoc/vite.config.js` for proxy settings.
 
-### Module 1: File Submission & Retrieval
-- Upload DOCX files or provide Google Drive links
-- Automatic file validation and virus scanning
-- Support for multiple file formats
+## 🎯 Key Features
 
-### Module 2: Metadata Extraction
-- Automatic extraction of document properties
-- Content analysis and statistics
-- Version tracking and history
+### 📤 Submission Management
+- **Token-based submission system** - Students submit via unique links
+- **Deadline management** - Create and manage submission deadlines with descriptions
+- **File validation** - Automatic DOCX file validation and size checking
+- **Cascade delete protection** - Prevent accidental deletion of deadlines with submissions
 
-### Module 3: Rule-Based Insights
-- Deadline monitoring and timeliness analysis
-- Contribution tracking
-- Automated compliance checking
+### 📊 Document Analysis
+- **Metadata extraction** - Author, creation date, last modified, last editor
+- **Content statistics** - Word count, page count, character count, sentence count
+- **Document properties** - Comprehensive metadata from DOCX files
 
-### Module 4: NLP Analysis (Optional)
-- Readability scoring
-- Content trends analysis
-- Named entity recognition
-- AI-assisted insights
+### 👨‍🏫 Professor Dashboard
+- **Overview statistics** - Active deadlines, total submissions, pending analysis
+- **Folder view** - Organize submissions by deadline
+- **Submission details** - View complete analysis results
+- **Individual file management** - Delete specific submissions
+- **Bulk operations** - Delete entire folders with all submissions
 
-### Module 5: Dashboard & Reports
-- Comprehensive professor dashboard
-- Submission management
-- PDF and CSV report generation
-- Analytics and visualizations
+### 🔐 Authentication & Security
+- **Session-based authentication** - Secure login system
+- **User registration** - Email and password registration
+- **Protected routes** - Role-based access control
+- **Token validation** - Secure submission links with expiration
+
+### 🎨 Modern UI/UX
+- **Responsive design** - Works on desktop, tablet, and mobile
+- **Clean interface** - Simple black icons, no clutter
+- **Visual feedback** - Success messages and loading states
+- **Smooth redirects** - Automatic navigation after actions
 
 ## 🔧 Development
 
@@ -182,90 +166,221 @@ VITE_GOOGLE_CLIENT_ID=your_client_id_here.apps.googleusercontent.com
 MetaDoc-Software-Project-Proposal-Evaluator/
 ├── backend/
 │   ├── app/
-│   │   ├── modules/          # Feature modules
-│   │   ├── models.py          # Database models
-│   │   └── __init__.py        # App factory
-│   ├── requirements.txt       # Full dependencies
-│   ├── requirements-minimal.txt  # Core dependencies
-│   ├── run.py                 # Application entry point
-│   └── config.py              # Configuration
+│   │   ├── api/                    # API route handlers
+│   │   │   ├── auth.py            # Authentication endpoints
+│   │   │   ├── dashboard.py       # Dashboard endpoints
+│   │   │   ├── submission.py      # Submission endpoints
+│   │   │   └── metadata.py        # Metadata endpoints
+│   │   ├── services/              # Business logic layer
+│   │   │   ├── auth_service.py
+│   │   │   ├── dashboard_service.py
+│   │   │   ├── submission_service.py
+│   │   │   └── metadata_service.py
+│   │   ├── models/                # Database models
+│   │   │   ├── user.py
+│   │   │   ├── submission.py
+│   │   │   ├── deadline.py
+│   │   │   └── analysis.py
+│   │   ├── schemas/               # Data transfer objects
+│   │   │   └── dto/
+│   │   ├── core/                  # Core configurations
+│   │   │   ├── extensions.py     # Flask extensions
+│   │   │   └── config.py         # App configuration
+│   │   └── utils/                 # Utility functions
+│   ├── scripts/                   # Database and utility scripts
+│   │   ├── reset_database.py
+│   │   └── create_test_user.py
+│   ├── uploads/                   # Uploaded files storage
+│   ├── temp/                      # Temporary file storage
+│   ├── requirements.txt           # Python dependencies
+│   ├── run.py                     # Application entry point
+│   └── metadoc.db                 # SQLite database (auto-created)
 ├── frontend/
 │   └── metadoc/
 │       ├── src/
-│       └── package.json
-└── SETUP_INSTRUCTIONS.md      # Detailed setup guide
+│       │   ├── pages/             # Page components
+│       │   │   ├── TokenBasedSubmission.jsx    # Public submission form
+│       │   │   ├── AuthenticatedSubmission.jsx # Logged-in submission
+│       │   │   ├── SubmissionDetailView.jsx    # Submission details
+│       │   │   ├── Dashboard.jsx               # Professor dashboard
+│       │   │   ├── Folder.jsx                  # Folder view
+│       │   │   ├── Deadlines.jsx               # Deadline management
+│       │   │   ├── Login.jsx                   # Login page
+│       │   │   └── Register.jsx                # Registration page
+│       │   ├── components/        # Reusable components
+│       │   ├── services/          # API service layer
+│       │   │   └── api.js
+│       │   ├── contexts/          # React contexts
+│       │   │   └── AuthContext.jsx
+│       │   ├── styles/            # CSS stylesheets
+│       │   └── App.jsx            # Main app component
+│       ├── vite.config.js         # Vite configuration
+│       └── package.json           # Node dependencies
+└── README.md                      # This file
 ```
 
-### Running Tests
+### Development Workflow
+
+**Starting the Application:**
 
 ```bash
-# Backend tests
+# Terminal 1 - Backend
 cd backend
-pytest tests/
+.\venv\Scripts\Activate.ps1  # Windows
+python run.py
 
-# Frontend tests
+# Terminal 2 - Frontend
 cd frontend/metadoc
-npm test
+npm run dev
 ```
 
-## 🐛 Common Issues
+**Resetting the Database:**
+
+```bash
+cd backend
+python scripts/reset_database.py
+```
+
+**Creating Test Users:**
+
+```bash
+cd backend
+python scripts/create_test_user.py
+```
+
+## 🐛 Troubleshooting
 
 ### Backend Won't Start
 
-**Issue**: `ModuleNotFoundError: No module named 'flask_jwt_extended'`
+**Issue**: `ModuleNotFoundError` or import errors
 
 **Solution**: 
 ```bash
-# Make sure virtual environment is activated
+# Ensure virtual environment is activated
 .\venv\Scripts\Activate.ps1  # Windows
 source venv/bin/activate      # Linux/Mac
 
 # Reinstall dependencies
-pip install -r requirements-minimal.txt
+pip install -r requirements.txt
 ```
 
-### Google OAuth Error
+### Frontend CORS Errors
 
-**Issue**: `Error 400: redirect_uri_mismatch`
+**Issue**: `Failed to fetch` or CORS errors in browser console
 
-**Solution**: Ensure redirect URI in `.env` exactly matches Google Cloud Console (no trailing slashes)
+**Solution**: 
+1. Ensure backend is running on `http://localhost:5000`
+2. Check `vite.config.js` proxy configuration
+3. Clear browser cache and restart frontend
 
-### Database Error
+### Database Locked Error
 
-**Issue**: Database connection failed
+**Issue**: `database is locked` error
 
-**Solution**: For development, use SQLite (no setup needed):
-```env
-DATABASE_URL=sqlite:///metadoc.db
+**Solution**: 
+```bash
+# Close all Python processes
+# On Windows Task Manager, end all python.exe processes
+# Then restart the backend
 ```
 
-For more troubleshooting, see [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md)
+### Port Already in Use
 
-## 📱 Usage
+**Issue**: `Address already in use` error
 
-1. **Access the application**: `http://localhost:3000`
-2. **Login with Google**: Use institutional email
-3. **Submit documents**: Upload files or provide Google Drive links
-4. **View analysis**: Check dashboard for insights and reports
-5. **Export reports**: Generate PDF or CSV reports
+**Solution**:
+```bash
+# Windows - Kill process on port 5000
+netstat -ano | findstr :5000
+taskkill /PID <PID> /F
 
-## 🏫 Institution Configuration
-
-Update the `.env` file with your institution settings:
-
-```env
-ALLOWED_EMAIL_DOMAINS=yourdomain.edu,anotherdomain.edu.ph
-INSTITUTION_NAME=Your Institution Name
+# Linux/Mac
+lsof -ti:5000 | xargs kill -9
 ```
 
-Only users with emails from allowed domains can access the system.
+### Login Not Working
 
-## 📚 Documentation
+**Issue**: Login fails or session not persisting
 
-- **[Complete Setup Guide](SETUP_INSTRUCTIONS.md)** - Detailed installation and configuration
-- **[Backend API Documentation](backend/README.md)** - API endpoints and usage
-- **[Frontend Documentation](frontend/metadoc/README.md)** - Frontend development
-- **[Troubleshooting Guide](TROUBLESHOOTING.md)** - Common issues and solutions
+**Solution**:
+1. Clear browser cookies and localStorage
+2. Check backend logs for errors
+3. Verify user exists in database
+4. Reset database and create new test user
+
+## 📱 User Guide
+
+### For Professors
+
+1. **Register/Login**
+   - Navigate to `http://localhost:5173`
+   - Register with email and password
+   - Login to access dashboard
+
+2. **Create Deadline**
+   - Go to "Deadline Management"
+   - Click "Create New Deadline"
+   - Fill in title, description, and deadline date
+   - Click "Create Deadline"
+
+3. **Generate Submission Link**
+   - In deadline card, click "Generate Link"
+   - Copy the submission link
+   - Share with students
+
+4. **View Submissions**
+   - Go to "Folders"
+   - Click on a deadline folder
+   - View all submitted files
+   - Click on a file to see detailed analysis
+
+5. **Delete Submissions**
+   - Click trash icon next to a file to delete it
+   - Click folder delete to remove entire deadline (deletes all files inside)
+
+### For Students
+
+1. **Access Submission Link**
+   - Click the link provided by your professor
+   - You'll see the deadline title and description
+
+2. **Submit Document**
+   - Enter your Student ID and Name
+   - Upload your DOCX file (max 50MB)
+   - Click "Submit Document"
+   - Save your Job ID for tracking
+
+3. **Submission Requirements**
+   - File must be in DOCX format
+   - File size must be under 50MB
+   - File must contain actual content (not empty)
+
+## 🔌 API Endpoints
+
+### Authentication
+- `POST /api/v1/auth/register` - Register new user
+- `POST /api/v1/auth/login-basic` - Login with email/password
+- `POST /api/v1/auth/logout` - Logout current session
+- `GET /api/v1/auth/validate` - Validate session
+- `POST /api/v1/auth/generate-submission-token` - Generate submission link
+
+### Dashboard
+- `GET /api/v1/dashboard/overview` - Get dashboard statistics
+- `GET /api/v1/dashboard/submissions` - List all submissions
+- `GET /api/v1/dashboard/submissions/:id` - Get submission details
+- `DELETE /api/v1/dashboard/submissions/:id` - Delete submission
+- `GET /api/v1/dashboard/deadlines` - List deadlines
+- `POST /api/v1/dashboard/deadlines` - Create deadline
+- `PUT /api/v1/dashboard/deadlines/:id` - Update deadline
+- `DELETE /api/v1/dashboard/deadlines/:id` - Delete deadline (and all submissions)
+
+### Submission
+- `GET /api/v1/submission/token-info` - Get deadline info from token
+- `POST /api/v1/submission/upload` - Upload document
+- `GET /api/v1/submission/status/:id` - Check submission status
+
+### Metadata
+- `GET /api/v1/metadata/result/:id` - Get analysis results
 
 ## 🤝 Contributing
 

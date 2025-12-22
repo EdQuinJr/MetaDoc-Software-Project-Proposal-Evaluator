@@ -73,11 +73,11 @@ const Login = () => {
       }
 
       // Handle successful login
-      setSuccess('Login successful! Redirecting...');
+      setSuccess('✓ Login successful! Redirecting to dashboard...');
 
       setTimeout(() => {
         handleOAuthCallback(data.session_token, data.user);
-      }, 3000);
+      }, 2000);
     } catch (err) {
       setError(err.message);
       setLoading(false);

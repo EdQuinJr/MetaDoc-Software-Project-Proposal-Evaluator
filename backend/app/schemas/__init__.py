@@ -22,6 +22,24 @@ from app.schemas.report_schemas import (
     ReportExportSchema
 )
 
+from app.schemas.dto import (
+    UserDTO,
+    UserSessionDTO,
+    UserProfileDTO,
+    SubmissionDTO,
+    SubmissionListDTO,
+    SubmissionDetailDTO,
+    SubmissionTokenDTO,
+    AnalysisResultDTO,
+    MetadataDTO,
+    ContentStatisticsDTO,
+    HeuristicInsightsDTO,
+    NLPResultDTO,
+    DeadlineDTO,
+    DeadlineListDTO,
+    ReportExportDTO
+)
+
 __all__ = [
     'LoginSchema',
     'RegisterSchema',
@@ -30,5 +48,20 @@ __all__ = [
     'DriveLinkSchema',
     'DeadlineCreateSchema',
     'DeadlineUpdateSchema',
-    'ReportExportSchema'
+    'ReportExportSchema',
+    'UserDTO',
+    'UserSessionDTO',
+    'UserProfileDTO',
+    'SubmissionDTO',
+    'SubmissionListDTO',
+    'SubmissionDetailDTO',
+    'SubmissionTokenDTO',
+    'AnalysisResultDTO',
+    'MetadataDTO',
+    'ContentStatisticsDTO',
+    'HeuristicInsightsDTO',
+    'NLPResultDTO',
+    'DeadlineDTO',
+    'DeadlineListDTO',
+    'ReportExportDTO'
 ]

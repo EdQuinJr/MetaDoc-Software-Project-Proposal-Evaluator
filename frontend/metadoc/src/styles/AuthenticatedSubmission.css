@@ -1,4 +1,4 @@
-.student-submit {
+.submission-form {
   min-height: 100vh;
   background: linear-gradient(135deg, var(--color-maroon-dark) 0%, var(--color-maroon) 100%);
   display: flex;

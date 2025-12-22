@@ -17,7 +17,7 @@ import Card from '../components/common/Card/Card';
 import Badge from '../components/common/Badge/Badge';
 import '../styles/SubmissionDetail.css';
 
-const SubmissionDetail = () => {
+const SubmissionDetailView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [submission, setSubmission] = useState(null);
@@ -147,7 +147,7 @@ const SubmissionDetail = () => {
               </div>
               <div className="stat-item">
                 <span className="stat-label">Page Count</span>
-                <span className="stat-number">{analysis.content_statistics?.estimated_pages || 0}</span>
+                <span className="stat-number">{analysis.content_statistics?.page_count || 0}</span>
               </div>
             </div>
           </Card>
@@ -268,82 +268,6 @@ const SubmissionDetail = () => {
           </Card>
         )}
 
-        {/* Heuristic Insights */}
-        {analysis?.heuristic_insights && (
-          <Card title="Heuristic Insights" className="card-full-width">
-            <div className="insights-grid">
-              {analysis.timeliness_classification && (
-                <div className="insight-card">
-                  <Clock size={24} className="insight-icon" />
-                  <div>
-                    <h4>Timeliness</h4>
-                    <Badge variant={getTimelinessColor(analysis.timeliness_classification)}>
-                      {formatTimeliness(analysis.timeliness_classification)}
-                    </Badge>
-                  </div>
-                </div>
-              )}
-              {analysis.contribution_growth_percentage !== null && (
-                <div className="insight-card">
-                  <TrendingUp size={24} className="insight-icon" />
-                  <div>
-                    <h4>Contribution Growth</h4>
-                    <span className="insight-value">
-                      {analysis.contribution_growth_percentage.toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </Card>
-        )}
-
-        {/* NLP Analysis */}
-        {analysis?.nlp_results && (
-          <Card title="NLP Analysis" className="card-full-width">
-            <div className="nlp-grid">
-              {analysis.flesch_kincaid_score !== null && (
-                <div className="nlp-card">
-                  <h4>Readability Score</h4>
-                  <div className="readability-score">
-                    <span className="score-value">{analysis.flesch_kincaid_score.toFixed(1)}</span>
-                    <span className="score-label">Flesch-Kincaid</span>
-                  </div>
-                  {analysis.readability_grade && (
-                    <p className="score-grade">Grade Level: {analysis.readability_grade}</p>
-                  )}
-                </div>
-              )}
-
-              {analysis.top_terms && analysis.top_terms.length > 0 && (
-                <div className="nlp-card">
-                  <h4>Top Terms</h4>
-                  <div className="terms-list">
-                    {analysis.top_terms.slice(0, 10).map((term, index) => (
-                      <span key={index} className="term-badge">
-                        {term.term} ({term.frequency})
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {analysis.named_entities && Object.keys(analysis.named_entities).length > 0 && (
-                <div className="nlp-card">
-                  <h4>Named Entities</h4>
-                  <div className="entities-list">
-                    {Object.entries(analysis.named_entities).map(([type, count]) => (
-                      <div key={type} className="entity-item">
-                        <span className="entity-type">{type}</span>
-                        <span className="entity-count">{count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </Card>
-        )}
 
         {/* AI Summary */}
         {analysis?.ai_summary && (
@@ -401,4 +325,4 @@ const formatTimeliness = (timeliness) => {
   return labels[timeliness] || timeliness;
 };
 
-export default SubmissionDetail;
+export default SubmissionDetailView;

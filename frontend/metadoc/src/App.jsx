@@ -4,10 +4,10 @@ import DashboardLayout from './components/Layout/DashboardLayout';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import OAuthCallback from './pages/OAuthCallback';
-import SubmitDocument from './pages/SubmitDocument';
+import TokenBasedSubmission from './pages/TokenBasedSubmission';
 import Dashboard from './pages/Dashboard';
 import Folder from './pages/Folder';
-import SubmissionDetail from './pages/SubmissionDetail';
+import SubmissionDetailView from './pages/SubmissionDetailView';
 import Deadlines from './pages/Deadlines';
 import './App.css';
 
@@ -63,7 +63,7 @@ function App() {
               </PublicRoute>
             }
           />
-          <Route path="/submit" element={<SubmitDocument />} />
+          <Route path="/submit" element={<TokenBasedSubmission />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="/auth/callback" element={<OAuthCallback />} />
 
@@ -103,7 +103,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <SubmissionDetail />
+                  <SubmissionDetailView />
                 </DashboardLayout>
               </ProtectedRoute>
             }

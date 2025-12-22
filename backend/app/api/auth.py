@@ -21,310 +21,18 @@ import secrets
 from app.core.extensions import db
 from app.models import User, UserSession, UserRole
 from app.services.audit_service import AuditService
+from app.schemas.dto import UserDTO, UserProfileDTO
 
 auth_bp = Blueprint('auth', __name__)
 
-class AuthenticationService:
-    """Service for handling OAuth authentication and session management"""
-    
-    def __init__(self):
-        self.google_client_id = current_app.config.get('GOOGLE_CLIENT_ID')
-        self.google_client_secret = current_app.config.get('GOOGLE_CLIENT_SECRET')
-        self.redirect_uri = current_app.config.get('GOOGLE_REDIRECT_URI')
-        self.allowed_domains = current_app.config.get('ALLOWED_EMAIL_DOMAINS', [])
-    
-    def get_google_auth_url(self, user_type='professor'):
-        """Generate Google OAuth authorization URL"""
-        try:
-            # Create OAuth flow
-            flow = Flow.from_client_config(
-                client_config={
-                    "web": {
-                        "client_id": self.google_client_id,
-                        "client_secret": self.google_client_secret,
-                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                        "token_uri": "https://oauth2.googleapis.com/token",
-                        "redirect_uris": [self.redirect_uri]
-                    }
-                },
-                scopes=[
-                    'openid',
-                    'https://www.googleapis.com/auth/userinfo.email',
-                    'https://www.googleapis.com/auth/userinfo.profile',
-                    'https://www.googleapis.com/auth/drive.readonly'
-                ]
-            )
-            
-            flow.redirect_uri = self.redirect_uri
-            
-            # Generate authorization URL with state for CSRF protection
-            state = secrets.token_urlsafe(32)
-            session['oauth_state'] = state
-            session['user_type'] = user_type  # Store user type in session
-            
-            authorization_url, _ = flow.authorization_url(
-                access_type='offline',
-                include_granted_scopes='true',
-                state=state,
-                prompt='consent'
-            )
-            
-            return authorization_url, None
-            
-        except Exception as e:
-            current_app.logger.error(f"OAuth URL generation failed: {e}")
-            return None, f"Authentication setup error: {e}"
-    
-    def handle_oauth_callback(self, authorization_code, state):
-        """Handle OAuth callback and create user session"""
-        try:
-            # Verify state parameter for CSRF protection
-            if state != session.get('oauth_state'):
-                return None, "Invalid OAuth state"
-            
-            # Create OAuth flow
-            flow = Flow.from_client_config(
-                client_config={
-                    "web": {
-                        "client_id": self.google_client_id,
-                        "client_secret": self.google_client_secret,
-                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                        "token_uri": "https://oauth2.googleapis.com/token",
-                        "redirect_uris": [self.redirect_uri]
-                    }
-                },
-                scopes=[
-                    'openid',
-                    'https://www.googleapis.com/auth/userinfo.email',
-                    'https://www.googleapis.com/auth/userinfo.profile',
-                    'https://www.googleapis.com/auth/drive.readonly'
-                ]
-            )
-            
-            flow.redirect_uri = self.redirect_uri
-            
-            # Exchange authorization code for tokens
-            flow.fetch_token(code=authorization_code)
-            
-            # Get user info from ID token
-            credentials = flow.credentials
-            # Add clock skew tolerance of 10 seconds
-            id_info = id_token.verify_oauth2_token(
-                credentials.id_token,
-                google_requests.Request(),
-                self.google_client_id,
-                clock_skew_in_seconds=10
-            )
-            
-            # Extract user information
-            google_id = id_info.get('sub')
-            email = id_info.get('email')
-            name = id_info.get('name')
-            picture = id_info.get('picture')
-            email_verified = id_info.get('email_verified', False)
-            
-            if not email_verified:
-                return None, "Email not verified with Google"
-            
-            # Check domain restrictions
-            if self.allowed_domains and not self._is_domain_allowed(email):
-                AuditService.log_authentication_event('login_attempt', email, False, 'Domain not allowed')
-                return None, f"Access restricted to domains: {', '.join(self.allowed_domains)}"
-            
-            # Create or update user
-            user = self._create_or_update_user(
-                google_id=google_id,
-                email=email,
-                name=name,
-                picture=picture
-            )
-            
-            if not user:
-                return None, "Failed to create user account"
-            
-            # Create user session
-            session_token = self._create_user_session(
-                user=user,
-                access_token=credentials.token,
-                refresh_token=credentials.refresh_token,
-                expires_at=credentials.expiry
-            )
-            
-            if not session_token:
-                return None, "Failed to create session"
-            
-            # Log successful authentication
-            AuditService.log_authentication_event('login_success', email, True)
-            
-            return {
-                'user': user.to_dict(),
-                'session_token': session_token,
-                'expires_at': (datetime.utcnow() + timedelta(hours=current_app.config.get('SESSION_TIMEOUT', 3600) // 3600)).isoformat()
-            }, None
-            
-        except Exception as e:
-            current_app.logger.error(f"OAuth callback handling failed: {e}")
-            if 'email' in locals():
-                AuditService.log_authentication_event('login_error', email, False, str(e))
-            return None, f"Authentication error: {e}"
-    
-    def _is_domain_allowed(self, email):
-        """Check if email domain is in allowed list"""
-        if not self.allowed_domains:
-            return True  # No restrictions
-        
-        email_domain = email.split('@')[1].lower()
-        return any(email_domain == domain.lower() or email_domain.endswith(f'.{domain.lower()}') 
-                  for domain in self.allowed_domains)
-    
-    def _create_or_update_user(self, google_id, email, name, picture):
-        """Create new user or update existing user"""
-        try:
-            # Get user type from session
-            user_type = session.get('user_type', 'professor')
-            role = UserRole.STUDENT if user_type == 'student' else UserRole.PROFESSOR
-            
-            # Check if user exists
-            user = User.query.filter_by(email=email).first()
-            
-            if user:
-                # Update existing user
-                user.google_id = google_id
-                user.name = name
-                user.profile_picture = picture
-                user.last_login = datetime.utcnow()
-                user.is_active = True
-                # Update role based on login type
-                user.role = role
-            else:
-                # Create new user
-                user = User(
-                    email=email,
-                    name=name,
-                    google_id=google_id,
-                    profile_picture=picture,
-                    role=role,
-                    last_login=datetime.utcnow(),
-                    is_active=True
-                )
-                db.session.add(user)
-            
-            db.session.commit()
-            return user
-            
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"User creation/update failed: {e}")
-            return None
-    
-    def _create_user_session(self, user, access_token, refresh_token, expires_at):
-        """Create user session with encrypted tokens"""
-        try:
-            # Generate session token
-            session_token = secrets.token_urlsafe(64)
-            
-            # Calculate session expiry
-            session_expiry = datetime.utcnow() + timedelta(
-                seconds=current_app.config.get('SESSION_TIMEOUT', 3600)
-            )
-            
-            # Create session record
-            user_session = UserSession(
-                session_token=session_token,
-                user_id=user.id,
-                expires_at=session_expiry,
-                ip_address=request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr),
-                user_agent=request.headers.get('User-Agent'),
-                google_access_token=self._encrypt_token(access_token) if access_token else None,
-                google_refresh_token=self._encrypt_token(refresh_token) if refresh_token else None,
-                token_expires_at=expires_at
-            )
-            
-            db.session.add(user_session)
-            db.session.commit()
-            
-            return session_token
-            
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Session creation failed: {e}")
-            return None
-    
-    def _encrypt_token(self, token):
-        """Encrypt token for secure storage (simplified implementation)"""
-        # In production, use proper encryption library like Fernet
-        # This is a placeholder for the encryption logic
-        return token  # TODO: Implement proper token encryption
-    
-    def validate_session(self, session_token):
-        """Validate user session token"""
-        try:
-            if not session_token:
-                return None, "No session token provided"
-            
-            # Find active session
-            user_session = UserSession.query.filter_by(
-                session_token=session_token,
-                is_active=True
-            ).first()
-            
-            if not user_session:
-                return None, "Invalid session token"
-            
-            # Check expiry
-            if user_session.expires_at < datetime.utcnow():
-                user_session.is_active = False
-                db.session.commit()
-                return None, "Session expired"
-            
-            # Get user
-            user = User.query.filter_by(id=user_session.user_id, is_active=True).first()
-            
-            if not user:
-                return None, "User account not found or inactive"
-            
-            return {
-                'user': user,
-                'session': user_session
-            }, None
-            
-        except Exception as e:
-            current_app.logger.error(f"Session validation failed: {e}")
-            return None, "Session validation error"
-    
-    def logout_user(self, session_token):
-        """Logout user and invalidate session"""
-        try:
-            user_session = UserSession.query.filter_by(
-                session_token=session_token,
-                is_active=True
-            ).first()
-            
-            if user_session:
-                user_session.is_active = False
-                db.session.commit()
-                
-                # Log logout event
-                user = User.query.filter_by(id=user_session.user_id).first()
-                if user:
-                    AuditService.log_authentication_event('logout', user.email, True)
-                
-                return True, None
-            else:
-                return False, "Session not found"
-                
-        except Exception as e:
-            current_app.logger.error(f"Logout failed: {e}")
-            return False, f"Logout error: {e}"
-
-# Initialize service lazily to avoid accessing current_app during import
+# Initialize service
 auth_service = None
 
 def get_auth_service():
-    """Get or create the authentication service instance"""
     global auth_service
     if auth_service is None:
-        auth_service = AuthenticationService()
+        from app.services import AuthService
+        auth_service = AuthService()
     return auth_service
 
 @auth_bp.route('/login', methods=['GET'])
@@ -407,7 +115,7 @@ def validate_session():
         
         return jsonify({
             'valid': True,
-            'user': result['user'].to_dict(),
+            'user': UserDTO.serialize(result['user']),
             'session_info': {
                 'expires_at': result['session']['expires_at'].isoformat(),
                 'created_at': result['session']['created_at'].isoformat()
@@ -480,8 +188,7 @@ def get_user_profile():
         }
         
         return jsonify({
-            'user': user.to_dict(),
-            'statistics': user_stats
+            'user': UserProfileDTO.serialize(user, include_stats=True)
         })
         
     except Exception as e:
@@ -651,7 +358,7 @@ def register():
         
         return jsonify({
             'message': 'Registration successful',
-            'user': user.to_dict()
+            'user': UserDTO.serialize(user)
         }), 201
         
     except Exception as e:
@@ -725,7 +432,7 @@ def login_basic():
         return jsonify({
             'message': 'Login successful',
             'session_token': session_token,
-            'user': user.to_dict(),
+            'user': UserDTO.serialize(user),
             'expires_at': session_expiry.isoformat()
         })
         

@@ -239,12 +239,30 @@ FLASK_ENV=production python run.py
 
 ## 📚 Documentation Files
 
-- `REFACTORING_PLAN.md` - Original plan
-- `REFACTORING_PROGRESS.md` - Phase-by-phase progress
-- `REFACTORING_COMPLETE.md` - Detailed completion report
-- `QUICK_REFERENCE.md` - This file
+- `BACKEND_SUMMARY.md` - Complete architecture overview
+- `QUICK_REFERENCE.md` - This file (quick reference)
+- `README.md` - Comprehensive documentation
+- `app/schemas/dto/README.md` - DTO usage guide
+- `GOOGLE_DRIVE_SETUP.md` - Google Drive setup
+
+## 🏗️ Architecture Overview
+
+```
+API Layer (Controllers)
+    ↓ uses
+Service Layer (Business Logic)
+    ↓ uses
+Persistence Layer (Database)
+```
+
+**10 Service Classes:**
+- AuthService, SubmissionService, DriveService
+- MetadataService, NLPService, InsightsService
+- DashboardService, ReportService
+- AuditService, ValidationService
 
 ---
 
-**Last Updated:** December 21, 2025
+**Last Updated:** December 22, 2025
 **Backend Status:** ✅ Running on http://localhost:5000
+**Architecture:** 3-Layer with Complete Service Separation

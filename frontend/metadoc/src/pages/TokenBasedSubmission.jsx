@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { submissionAPI } from '../services/api';
+import axios from 'axios';
 import { Upload, Link as LinkIcon, FileText, CheckCircle, AlertCircle, X, Check } from 'lucide-react';
 import Card from '../components/common/Card/Card';
 import Input from '../components/common/Input/Input';
 import Button from '../components/common/Button/Button';
-import '../styles/SubmitDocument.css';
+import '../styles/TokenBasedSubmission.css';
 
-const SubmitDocument = () => {
+const TokenBasedSubmission = () => {
   const [activeTab, setActiveTab] = useState('upload'); // 'upload' or 'drive'
   const [loading, setLoading] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -28,12 +29,31 @@ const SubmitDocument = () => {
   });
 
   const [linkValidation, setLinkValidation] = useState(null);
+  const [deadlineInfo, setDeadlineInfo] = useState(null);
 
   // Get token from URL
   const getTokenFromURL = () => {
     const params = new URLSearchParams(window.location.search);
     return params.get('token');
   };
+
+  // Fetch deadline info when component mounts
+  useEffect(() => {
+    const fetchDeadlineInfo = async () => {
+      const token = getTokenFromURL();
+      if (token) {
+        try {
+          const response = await axios.get(`/api/v1/submission/token-info?token=${token}`);
+          if (response.data) {
+            setDeadlineInfo(response.data);
+          }
+        } catch (err) {
+          console.error('Failed to fetch deadline info:', err);
+        }
+      }
+    };
+    fetchDeadlineInfo();
+  }, []);
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -218,7 +238,21 @@ const SubmitDocument = () => {
       <Card className="submit-container">
         <div className="submit-header">
           <h2>Submit Your Document</h2>
-          <p>Upload a DOCX file or provide a Google Drive link for analysis</p>
+          {deadlineInfo ? (
+            <div className="deadline-info">
+              <h3 className="deadline-title">{deadlineInfo.title}</h3>
+              {deadlineInfo.description && (
+                <p className="deadline-description">{deadlineInfo.description}</p>
+              )}
+              {deadlineInfo.deadline_datetime && (
+                <p className="deadline-date">
+                  Due: {new Date(deadlineInfo.deadline_datetime).toLocaleString()}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p>Upload a DOCX file or provide a Google Drive link for analysis</p>
+          )}
         </div>
 
         {!getTokenFromURL() && (
@@ -499,4 +533,4 @@ const SubmitDocument = () => {
   );
 };
 
-export default SubmitDocument;
+export default TokenBasedSubmission;

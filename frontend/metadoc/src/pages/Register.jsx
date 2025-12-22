@@ -9,6 +9,7 @@ const Register = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [success, setSuccess] = useState(false);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -51,9 +52,11 @@ const Register = () => {
                 throw new Error(data.error || 'Registration failed');
             }
 
-            // On success, redirect to login with a message? 
-            // Or just navigate to login
-            navigate('/login', { state: { message: 'Registration successful! Please login.' } });
+            // Show success message then redirect
+            setSuccess(true);
+            setTimeout(() => {
+                navigate('/login', { state: { message: 'Registration successful! Please login.' } });
+            }, 2000);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -118,6 +121,12 @@ const Register = () => {
                         {error && (
                             <div className="alert alert-error">
                                 <p>{error}</p>
+                            </div>
+                        )}
+
+                        {success && (
+                            <div className="alert alert-success">
+                                <p>✓ Registration successful! Redirecting to login...</p>
                             </div>
                         )}
 

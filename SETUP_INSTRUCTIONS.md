@@ -1,6 +1,6 @@
 # MetaDoc Backend Setup Instructions
 
-**Last Updated**: December 18, 2025  
+**Last Updated**: December 21, 2025  
 **Tested On**: Windows 11, Python 3.13
 
 This guide provides step-by-step instructions for setting up the MetaDoc backend for development.
@@ -83,13 +83,7 @@ cp .env.example .env
 
 Edit `.env` with your settings (see Configuration section below).
 
-### 6. Initialize Database
-
-```bash
-python database_setup.py init
-```
-
-### 7. Run the Application
+### 6. Run the Application
 
 ```bash
 python run.py
@@ -130,11 +124,15 @@ python run.py
 # ============================================
 # Database Configuration
 # ============================================
-# Use SQLite for development (no setup needed)
+# SQLite (Recommended for development - no setup needed)
+# The backend automatically uses absolute path to avoid issues
 DATABASE_URL=sqlite:///metadoc.db
 
 # For production with MySQL:
 # DATABASE_URL=mysql+pymysql://username:password@localhost:3306/metadoc_db
+
+# For PostgreSQL:
+# DATABASE_URL=postgresql://username:password@localhost:5432/metadoc_db
 
 # ============================================
 # Google OAuth2 (REQUIRED)
@@ -275,14 +273,18 @@ pip install --upgrade SQLAlchemy
 
 ### Database Errors
 
-**Problem**: Database connection errors
+**Problem**: `sqlite3.OperationalError: unable to open database file`
 
-**Solution for SQLite** (Development):
-- No setup needed, file will be created automatically
-- Make sure you have write permissions in the backend directory
+**Solution**:
+- The backend now automatically handles database paths with absolute paths
+- Database file will be created in `backend/metadoc.db`
+- Ensure you have write permissions in the backend directory
+- If using OneDrive, the path with spaces is handled automatically
 
-**Solution for MySQL** (Production):
-- Ensure MySQL server is running
+**Problem**: Database connection errors with MySQL/PostgreSQL
+
+**Solution**:
+- Ensure database server is running
 - Verify credentials in DATABASE_URL
 - Create database manually if needed:
   ```sql
@@ -346,8 +348,8 @@ pip freeze > requirements.txt  # Update requirements
 # Run server
 python run.py
 
-# Reset database
-python database_setup.py init
+# Check database location (for debugging)
+python -c "from config import config; print(config['development'].SQLALCHEMY_DATABASE_URI)"
 
 # Deactivate venv
 deactivate
