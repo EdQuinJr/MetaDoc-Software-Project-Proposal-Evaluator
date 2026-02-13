@@ -640,21 +640,24 @@ const Folder = () => {
                   <div className="preview-section">
                     <h4 className="preview-section-header">Document Metadata:</h4>
                     <div className="metadata-grid-compact">
-                      <div className="meta-pair">
-                        <span className="meta-label">Application:</span>
-                        <span className="meta-val">{previewSubmission.analysis_result?.document_metadata?.application || 'Unknown'}</span>
-                      </div>
+
                       <div className="meta-pair">
                         <span className="meta-label">Author:</span>
                         <span className="meta-val">{previewSubmission.analysis_result?.document_metadata?.author || 'Unknown'}</span>
                       </div>
                       <div className="meta-pair">
                         <span className="meta-label">Creation Date:</span>
-                        <span className="meta-val">{previewSubmission.analysis_result?.document_metadata?.creation_date ? new Date(previewSubmission.analysis_result.document_metadata.creation_date).toLocaleString() : 'Unknown'}</span>
+                        <span className="meta-val">
+                          {(previewSubmission.analysis_result?.document_metadata?.creation_date || previewSubmission.analysis_result?.document_metadata?.created_date)
+                            ? new Date(previewSubmission.analysis_result.document_metadata.creation_date || previewSubmission.analysis_result.document_metadata.created_date).toLocaleString()
+                            : 'Unknown'}
+                        </span>
                       </div>
                       <div className="meta-pair">
                         <span className="meta-label">File Size:</span>
-                        <span className="meta-val">{previewSubmission.file_size} bytes</span>
+                        <span className="meta-val">
+                          {(previewSubmission.file_size / 1024 / 1024).toFixed(2)} MB
+                        </span>
                       </div>
                       <div className="meta-pair">
                         <span className="meta-label">Last Editor:</span>
@@ -662,7 +665,11 @@ const Folder = () => {
                       </div>
                       <div className="meta-pair">
                         <span className="meta-label">Last Modified Date:</span>
-                        <span className="meta-val">{previewSubmission.analysis_result?.document_metadata?.last_modified_date ? new Date(previewSubmission.analysis_result.document_metadata.last_modified_date).toLocaleString() : 'Unknown'}</span>
+                        <span className="meta-val">
+                          {(previewSubmission.analysis_result?.document_metadata?.last_modified_date || previewSubmission.analysis_result?.document_metadata?.modified_date)
+                            ? new Date(previewSubmission.analysis_result.document_metadata.last_modified_date || previewSubmission.analysis_result.document_metadata.modified_date).toLocaleString()
+                            : 'Unknown'}
+                        </span>
                       </div>
                     </div>
                   </div>

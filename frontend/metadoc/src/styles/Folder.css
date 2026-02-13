@@ -1156,24 +1156,43 @@
 
 .metadata-grid-compact {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem 2rem;
-  font-size: 0.85rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem 3rem;
+  /* Increased horizontal gap */
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .metadata-grid-compact {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
 }
 
 .meta-pair {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  /* Stack label and value for cleaner look if value is long */
+  gap: 0.25rem;
 }
 
 .meta-label {
   font-weight: 700;
   color: #374151;
-  min-width: 100px;
+  /* Gray-700 */
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
 }
 
 .meta-val {
-  color: #4b5563;
+  color: #111827;
+  /* Gray-900 */
+  font-weight: 500;
+  word-break: break-word;
+  /* Ensure long emails don't overflow */
+  line-height: 1.5;
 }
 
 .contributors-list-simple {
