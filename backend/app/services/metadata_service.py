@@ -41,8 +41,12 @@ class MetadataService:
             'file_size': 0,
             'word_count': 0,
             'revision_count': 0,
-            'application': 'Unknown'
+            'editing_time_minutes': 0,
+            'application': 'Unknown',
+            'contributors': []
         }
+        
+        parsing_error = None
         
         try:
             # Get file size
@@ -77,76 +81,99 @@ class MetadataService:
                 with zipfile.ZipFile(file_path, 'r') as zip_file:
                     # Read app properties for more detailed metadata
                     if 'docProps/app.xml' in zip_file.namelist():
-                        app_xml = zip_file.read('docProps/app.xml')
-                        app_root = ET.fromstring(app_xml)
-                        
-                        # Find application name
-                        for elem in app_root.iter():
-                            if elem.tag.endswith('Application'):
-                                metadata['application'] = elem.text or 'Unknown'
-                                break
-                        
-                        # Find word count
-                        for elem in app_root.iter():
-                            if elem.tag.endswith('Words'):
+                        try:
+                            app_xml = zip_file.read('docProps/app.xml')
+                            app_root = ET.fromstring(app_xml)
+                            
+                            # Find all text elements to handle namespaces
+                            all_text = {elem.tag.split('}')[-1]: elem.text for elem in app_root.iter()}
+                            
+                            if 'Application' in all_text:
+                                metadata['application'] = all_text['Application']
+                            if 'Words' in all_text:
                                 try:
-                                    metadata['word_count'] = int(elem.text or 0)
-                                except (ValueError, TypeError):
-                                    metadata['word_count'] = 0
-                                break
+                                    metadata['word_count'] = int(all_text['Words'])
+                                except: pass
+                            if 'TotalTime' in all_text:
+                                try:
+                                    metadata['editing_time_minutes'] = int(all_text['TotalTime'])
+                                except: pass
+                        except Exception as e:
+                            current_app.logger.warning(f"Error parsing app.xml: {e}")
                     
-                    # Read core properties for additional timestamps
+                    # Read core properties for additional timestamps if python-docx missed them
                     if 'docProps/core.xml' in zip_file.namelist():
-                        core_xml = zip_file.read('docProps/core.xml')
-                        core_root = ET.fromstring(core_xml)
-                        
-                        for elem in core_root.iter():
-                            if elem.tag.endswith('created') and not metadata['creation_date']:
-                                metadata['creation_date'] = elem.text
-                            elif elem.tag.endswith('modified') and not metadata['last_modified_date']:
-                                metadata['last_modified_date'] = elem.text
-                            elif elem.tag.endswith('lastModifiedBy') and metadata['last_editor'] == 'Unavailable':
-                                metadata['last_editor'] = elem.text
+                        try:
+                            core_xml = zip_file.read('docProps/core.xml')
+                            core_root = ET.fromstring(core_xml)
+                            
+                            for elem in core_root.iter():
+                                tag = elem.tag.split('}')[-1]
+                                text = elem.text
+                                if not text: continue
                                 
-                        current_app.logger.info(f"Manual XML Extraction - Creator: {metadata.get('author')}, LastEditor: {metadata.get('last_editor')}")
-            
+                                if tag == 'created' and not metadata['creation_date']:
+                                    metadata['creation_date'] = text
+                                elif tag == 'modified' and not metadata['last_modified_date']:
+                                    metadata['last_modified_date'] = text
+                                elif tag == 'lastModifiedBy' and metadata['last_editor'] == 'Unavailable':
+                                    metadata['last_editor'] = text
+                                elif tag == 'creator' and metadata['author'] == 'Unavailable':
+                                    metadata['author'] = text
+                        except Exception as e:
+                            current_app.logger.warning(f"Error parsing core.xml: {e}")
             except Exception as e:
                 current_app.logger.warning(f"Could not extract extended metadata: {e}")
             
-            # Fallback: If last_editor is still Unavailable, use author if available
-            if metadata['last_editor'] == 'Unavailable' and metadata['author'] != 'Unavailable':
-                metadata['last_editor'] = metadata['author']
-            
-            # If last_editor is 'python-docx', set to Unavailable (if author fallback didn't help)
-            if 'python-docx' in metadata['last_editor']:
-                metadata['last_editor'] = 'Unavailable'
-            
-            # Initialize contributors list for standard uploads
-            metadata['contributors'] = []
-            if metadata.get('author') and metadata['author'] != 'Unavailable':
-                metadata['contributors'].append({
-                    'name': metadata['author'], 
-                    'role': 'Owner and Writer',
-                    'date': metadata.get('creation_date')
-                })
-            
-            if metadata.get('last_editor') and metadata['last_editor'] != 'Unavailable':
-                # Avoid duplicates
-                if not metadata['contributors'] or metadata['contributors'][0]['name'] != metadata['last_editor']:
-                    metadata['contributors'].append({
-                        'name': metadata['last_editor'], 
-                        'role': 'Last Editor',
-                        'date': metadata.get('last_modified_date')
-                    })
-            
-            
-            return metadata, None
-            
-        except PackageNotFoundError:
-            return None, "Invalid DOCX file format"
         except Exception as e:
             current_app.logger.error(f"Metadata extraction failed: {e}")
-            return None, f"Metadata extraction error: {e}"
+            parsing_error = str(e)
+            metadata['parsing_error'] = parsing_error
+
+        # [ALWAYS RUN] Cleanup and Fallback Logic
+        
+        # Fallback: If last_editor is still Unavailable, use author if available
+        if metadata['last_editor'] == 'Unavailable' and metadata['author'] != 'Unavailable':
+            metadata['last_editor'] = metadata['author']
+        
+        # Cleanup 'python-docx' default value
+        if metadata['last_editor'] and 'python-docx' in str(metadata['last_editor']):
+            metadata['last_editor'] = 'Unavailable'
+        if metadata['author'] and 'python-docx' in str(metadata['author']):
+            metadata['author'] = 'Unavailable'
+        
+        # Populate contributors
+        if metadata['author'] != 'Unavailable':
+            metadata['contributors'].append({
+                'name': metadata['author'], 
+                'role': 'Author',
+                'date': metadata['creation_date']
+            })
+        
+        if metadata['last_editor'] != 'Unavailable':
+            if not metadata['contributors'] or metadata['contributors'][0]['name'] != metadata['last_editor']:
+                metadata['contributors'].append({
+                    'name': metadata['last_editor'], 
+                    'role': 'Editor',
+                    'date': metadata['last_modified_date']
+                })
+        
+        # [Fallback] Filesystem timestamps if document metadata is missing
+        if not metadata['creation_date']:
+            try:
+                c_time = os.path.getctime(file_path)
+                metadata['creation_date'] = datetime.fromtimestamp(c_time).isoformat()
+            except Exception: pass
+        
+        if not metadata['last_modified_date']:
+            try:
+                m_time = os.path.getmtime(file_path)
+                metadata['last_modified_date'] = datetime.fromtimestamp(m_time).isoformat()
+            except Exception: pass
+            
+        # Return whatever we managed to extract
+        return metadata, None
+
     
     def extract_document_text(self, file_path):
         """Extract full text content from DOCX file"""

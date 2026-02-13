@@ -114,6 +114,7 @@ class DashboardService:
                 'job_id': s.job_id,
                 'file_name': s.original_filename,
                 'student_name': s.student_name,
+                'student_id': s.student_id,
                 'status': s.status.value,
                 'created_at': s.created_at.isoformat()
             } for s in submissions]
@@ -135,7 +136,8 @@ class DashboardService:
                 'id': d.id,
                 'title': d.title,
                 'deadline_datetime': d.deadline_datetime.isoformat(),
-                'course_code': d.course_code
+                'course_code': d.course_code,
+                'submission_count': len(d.submissions) if d.submissions else 0
             } for d in deadlines]
             
         except Exception as e:
@@ -245,7 +247,8 @@ class DashboardService:
                 deadline_datetime=datetime.fromisoformat(deadline_data['deadline_datetime']),
                 timezone=deadline_data.get('timezone', 'UTC'),
                 course_code=deadline_data.get('course_code'),
-                assignment_type=deadline_data.get('assignment_type')
+                assignment_type=deadline_data.get('assignment_type'),
+                rubric_id=deadline_data.get('rubric_id')
             )
             
             db.session.add(deadline)
@@ -281,6 +284,8 @@ class DashboardService:
                 deadline.course_code = deadline_data['course_code']
             if 'assignment_type' in deadline_data:
                 deadline.assignment_type = deadline_data['assignment_type']
+            if 'rubric_id' in deadline_data:
+                deadline.rubric_id = deadline_data['rubric_id']
             
             db.session.commit()
             

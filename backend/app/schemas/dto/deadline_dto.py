@@ -23,6 +23,7 @@ class DeadlineDTO:
             'course_code': deadline.course_code,
             'assignment_type': deadline.assignment_type,
             'professor_id': deadline.professor_id,
+            'rubric_id': deadline.rubric_id if hasattr(deadline, 'rubric_id') else None,
             'created_at': deadline.created_at.isoformat() if hasattr(deadline, 'created_at') else None
         }
         
@@ -39,6 +40,9 @@ class DeadlineDTO:
                     'late': late
                 }
         
+        if hasattr(deadline, 'rubric') and deadline.rubric:
+            data['rubric'] = deadline.rubric.to_dict()
+            
         return data
     
     @staticmethod

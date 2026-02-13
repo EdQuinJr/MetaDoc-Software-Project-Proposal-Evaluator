@@ -23,6 +23,7 @@ from app.models.base import (
 from app.models.user import User, UserSession
 from app.models.submission import Submission, SubmissionToken
 from app.models.deadline import Deadline
+from app.models.rubric import Rubric
 from app.models.analysis import AnalysisResult, DocumentSnapshot
 from app.models.audit import AuditLog
 from app.models.report import ReportExport
@@ -40,6 +41,7 @@ __all__ = [
     'Submission',
     'SubmissionToken',
     'Deadline',
+    'Rubric',
     'AnalysisResult',
     'DocumentSnapshot',
     'AuditLog',

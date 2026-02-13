@@ -160,7 +160,7 @@ class SubmissionDetailDTO:
         
         if hasattr(submission, 'analysis_result') and submission.analysis_result:
             from .analysis_dto import AnalysisResultDTO
-            data['analysis_result'] = AnalysisResultDTO.serialize(submission.analysis_result)
+            data['analysis_result'] = AnalysisResultDTO.serialize(submission.analysis_result, include_full_text=True)
         
         if hasattr(submission, 'deadline') and submission.deadline:
             from .deadline_dto import DeadlineDTO

@@ -154,6 +154,15 @@ class ReportService:
                     
                     row['Readability Score'] = analysis.flesch_kincaid_score or 'N/A'
                     row['Timeliness'] = analysis.timeliness_classification.value if analysis.timeliness_classification else 'N/A'
+                    
+                    # [FEATURE] Add Rubric Ratings to CVS
+                    if analysis.ai_insights and isinstance(analysis.ai_insights, dict):
+                        rubric_eval = analysis.ai_insights.get('rubric_evaluation')
+                        if rubric_eval and isinstance(rubric_eval, list):
+                            for item in rubric_eval:
+                                if item.get('criteria') and item.get('rating'):
+                                    col_name = f"Rubric: {item['criteria']}"
+                                    row[col_name] = item['rating']
                 else:
                     row['Word Count'] = 'N/A'
                     row['Page Count'] = 'N/A'

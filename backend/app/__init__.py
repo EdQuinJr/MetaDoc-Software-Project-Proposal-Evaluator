@@ -108,13 +108,17 @@ def register_blueprints(app):
     from app.api.insights import insights_bp
     app.register_blueprint(insights_bp, url_prefix='/api/v1/insights')
     
-    # NLP Analysis (temporarily disabled - requires spacy)
-    # from app.api.nlp import nlp_bp
-    # app.register_blueprint(nlp_bp, url_prefix='/api/v1/nlp')
+    # NLP Analysis
+    from app.api.nlp import nlp_bp
+    app.register_blueprint(nlp_bp, url_prefix='/api/v1/nlp')
     
     # Reports
     from app.api.reports import reports_bp
     app.register_blueprint(reports_bp, url_prefix='/api/v1/reports')
+
+    # Rubrics
+    from app.api.rubric import rubric_bp
+    app.register_blueprint(rubric_bp, url_prefix='/api/v1/rubrics')
 
 def register_error_handlers(app):
     """Register error handlers"""

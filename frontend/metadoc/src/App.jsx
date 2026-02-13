@@ -9,6 +9,8 @@ import Dashboard from './pages/Dashboard';
 import Folder from './pages/Folder';
 import SubmissionDetailView from './pages/SubmissionDetailView';
 import Deadlines from './pages/Deadlines';
+import Rubrics from './pages/Rubrics';
+import Reports from './pages/Reports';
 import './App.css';
 
 // Protected Route Component
@@ -119,14 +121,21 @@ function App() {
             }
           />
           <Route
+            path="/dashboard/rubrics"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <Rubrics />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/dashboard/reports"
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <div style={{ padding: '2rem' }}>
-                    <h1>Reports</h1>
-                    <p>Report generation coming soon...</p>
-                  </div>
+                  <Reports />
                 </DashboardLayout>
               </ProtectedRoute>
             }

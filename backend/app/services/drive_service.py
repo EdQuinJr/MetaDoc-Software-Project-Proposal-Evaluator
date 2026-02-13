@@ -17,8 +17,20 @@ class DriveService:
     def __init__(self):
         self._service = None
     
-    def _get_drive_service(self):
+    def _get_drive_service(self, user_credentials_json=None):
         """Initialize Google Drive API service (lazy initialization)"""
+        # Always prioritize user credentials if provided (for accessing user-specific files)
+        if user_credentials_json:
+             try:
+                 import json
+                 from google.oauth2.credentials import Credentials
+                 creds_dict = json.loads(user_credentials_json)
+                 creds = Credentials.from_authorized_user_info(creds_dict)
+                 return build('drive', 'v3', credentials=creds)
+             except Exception as e:
+                 current_app.logger.error(f"Failed to create service from user credentials: {e}")
+                 # Fallthrough to service account
+        
         if self._service:
             return self._service
             
@@ -33,10 +45,59 @@ class DriveService:
             current_app.logger.error(f"Failed to initialize Google Drive service: {e}")
             raise Exception("Google Drive service unavailable")
     
-    def get_file_metadata(self, file_id):
+    def get_file_metadata(self, file_id, user_credentials_json=None):
         """Get file metadata from Google Drive"""
         try:
-            service = self._get_drive_service()
+            try:
+                service = self._get_drive_service(user_credentials_json)
+            except Exception as service_error:
+                # If service account is missing or fails, try to scrape public title
+                current_app.logger.warning(f"Service account unavailable ({service_error}), attempting public metadata scrape")
+                
+                file_name = 'Google_Drive_File.docx'
+                try:
+                    import urllib.request
+                    import re
+                    # Try to fetch title from public link
+                    url = f"https://docs.google.com/document/d/{file_id}/preview"
+                    
+                    # Use a standard User-Agent to avoid being blocked
+                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+                    req = urllib.request.Request(url, headers=headers)
+                    
+                    with urllib.request.urlopen(req, timeout=5) as response:
+                        html_content = response.read().decode('utf-8', errors='ignore')
+                        
+                        # Try multiple patterns
+                        patterns = [
+                            r'<title>(.*?) - Google Docs</title>',
+                            r'<meta property="og:title" content="(.*?)">',
+                            r'<meta name="title" content="(.*?)">'
+                        ]
+                        
+                        found_title = None
+                        for pattern in patterns:
+                            match = re.search(pattern, html_content)
+                            if match:
+                                found_title = match.group(1)
+                                break
+                        
+                        if found_title:
+                            # Clean up title
+                            found_title = found_title.strip()
+                            if not found_title.endswith('.docx'):
+                                found_title += '.docx'
+                            file_name = found_title
+                            current_app.logger.info(f"Scraped public title: {file_name}")
+
+                except Exception as scrape_err:
+                    current_app.logger.warning(f"Public title scrape failed: {scrape_err}")
+
+                return {
+                    'id': file_id,
+                    'name': file_name,
+                    'mimeType': 'application/vnd.google-apps.document' 
+                }, None
             
             # Get file metadata
             metadata = service.files().get(
@@ -107,6 +168,32 @@ class DriveService:
             return None, f"Failed to download file: {e}"
         
         except Exception as e:
+            # Fallback: Try downloading as a public file if API fails (no service account or permission error)
+            # This works for files shared as "Anyone with link"
+            try:
+                current_app.logger.info(f"Attempting public download fallback for {file_id}")
+                
+                # Construct export URL for Docs or direct link for files
+                if mime_type == 'application/vnd.google-apps.document':
+                    url = f"https://docs.google.com/document/d/{file_id}/export?format=docx"
+                else:
+                    url = f"https://drive.google.com/uc?id={file_id}&export=download"
+                
+                import requests
+                response = requests.get(url, allow_redirects=True)
+                
+                if response.status_code == 200:
+                    # Save to temporary storage
+                    if not filename.endswith('.docx') and mime_type == 'application/vnd.google-apps.document':
+                         filename += '.docx'
+                         
+                    temp_path = os.path.join(current_app.config['TEMP_STORAGE_PATH'], filename)
+                    with open(temp_path, 'wb') as f:
+                        f.write(response.content)
+                    return temp_path, None
+            except Exception as fallback_error:
+                current_app.logger.error(f"Public fallback failed: {fallback_error}")
+
             current_app.logger.error(f"Unexpected error downloading file: {e}")
             return None, f"Unexpected error: {e}"
     

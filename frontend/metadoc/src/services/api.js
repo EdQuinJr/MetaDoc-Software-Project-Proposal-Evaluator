@@ -72,6 +72,8 @@ export const dashboardAPI = {
   createDeadline: (data) => api.post('/dashboard/deadlines', data),
   updateDeadline: (deadlineId, data) => api.put(`/dashboard/deadlines/${deadlineId}`, data),
   deleteDeadline: (deadlineId) => api.delete(`/dashboard/deadlines/${deadlineId}`),
+  getSubmissionFile: (submissionId) => api.get(`/dashboard/submissions/${submissionId}/download`, { responseType: 'blob' }),
+  downloadDeadlineFiles: (deadlineId) => api.get(`/dashboard/deadlines/${deadlineId}/download-all`, { responseType: 'blob' }),
 };
 
 // Metadata API
@@ -95,11 +97,22 @@ export const nlpAPI = {
 };
 
 // Reports API
+// Reports API
 export const reportsAPI = {
-  exportPDF: (submissionIds) => api.post('/reports/export/pdf', { submission_ids: submissionIds }),
-  exportCSV: (submissionIds) => api.post('/reports/export/csv', { submission_ids: submissionIds }),
+  // Accepts { submission_ids: [...] } OR { filters: { ... } }
+  exportPDF: (data) => api.post('/reports/export/pdf', data),
+  exportCSV: (data) => api.post('/reports/export/csv', data),
   downloadExport: (exportId) => api.get(`/reports/download/${exportId}`, { responseType: 'blob' }),
   getExports: () => api.get('/reports/exports'),
+};
+
+// Rubric API
+export const rubricAPI = {
+  getRubrics: () => api.get('/rubrics/'),
+  createRubric: (data) => api.post('/rubrics/', data),
+  getRubric: (rubricId) => api.get(`/rubrics/${rubricId}`),
+  updateRubric: (rubricId, data) => api.put(`/rubrics/${rubricId}`, data),
+  deleteRubric: (rubricId) => api.delete(`/rubrics/${rubricId}`),
 };
 
 export default api;

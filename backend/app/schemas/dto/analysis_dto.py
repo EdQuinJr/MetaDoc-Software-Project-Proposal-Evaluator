@@ -16,14 +16,19 @@ class MetadataDTO:
         
         return {
             'author': metadata.get('author'),
-            'created_date': metadata.get('created_date'),
-            'modified_date': metadata.get('modified_date'),
+            # Map service keys (creation_date) to DTO keys or standard ones
+            'created_date': metadata.get('creation_date') or metadata.get('created_date'),
+            'modified_date': metadata.get('last_modified_date') or metadata.get('modified_date'),
+            'last_editor': metadata.get('last_editor') or metadata.get('last_modified_by'),
+            'revision_count': metadata.get('revision_count') or metadata.get('revision'),
+            'editing_time_minutes': metadata.get('editing_time_minutes') or metadata.get('total_editing_time'),
+            'application': metadata.get('application'),
+            'contributors': metadata.get('contributors', []),
+            
+            # Keep legacy keys for backward compatibility if needed
             'title': metadata.get('title'),
             'subject': metadata.get('subject'),
-            'keywords': metadata.get('keywords'),
-            'last_modified_by': metadata.get('last_modified_by'),
-            'revision': metadata.get('revision'),
-            'total_editing_time': metadata.get('total_editing_time')
+            'keywords': metadata.get('keywords')
         }
 
 

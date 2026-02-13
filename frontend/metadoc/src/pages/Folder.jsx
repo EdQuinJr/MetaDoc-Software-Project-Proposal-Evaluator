@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { dashboardAPI } from '../services/api';
+import { dashboardAPI, reportsAPI } from '../services/api';
 import {
   FileText,
   Search,
@@ -15,7 +15,9 @@ import {
   AlertTriangle,
   Clock,
   Folder as FolderIcon,
-  ArrowLeft
+  ArrowLeft,
+  Download,
+  Archive
 } from 'lucide-react';
 import '../styles/Folder.css';
 
@@ -176,6 +178,43 @@ const Folder = () => {
     }
   };
 
+  // --- EXPORT LOGIC ---
+
+  const handleExportCSV = async () => {
+    if (!selectedDeadline) return;
+
+    try {
+      const confirmExport = window.confirm(`Export overview for "${selectedDeadline.title}" as CSV?`);
+      if (!confirmExport) return;
+
+      const response = await reportsAPI.exportCSV({
+        filters: { deadline_id: selectedDeadline.id }
+      });
+
+      if (response.data && response.data.export_id) {
+        // Trigger download
+        const exportId = response.data.export_id;
+        const downloadUrl = `/api/v1/reports/download/${exportId}`;
+
+        // Use authenticated download via API or direct if cookie/token handled? 
+        // Best to use the blob approach to ensure auth headers are sent
+        const blobResponse = await reportsAPI.downloadExport(exportId);
+        const url = window.URL.createObjectURL(new Blob([blobResponse.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', response.data.filename || 'export.csv');
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } else {
+        alert('Export failed: No export ID returned.');
+      }
+    } catch (err) {
+      console.error('Export failed:', err);
+      alert('Failed to generate export. Please try again.');
+    }
+  };
+
   // --- PREVIEW LOGIC ---
 
   const openPreview = async (e, submission) => {
@@ -229,6 +268,32 @@ const Folder = () => {
       className: 'status-ontime',
       badgeClass: 'ontime'
     };
+  };
+
+  const handleDownloadZip = async () => {
+    if (!selectedDeadline) return;
+
+    try {
+      const confirmDownload = window.confirm(`Download all submission files for "${selectedDeadline.title}" as a ZIP?`);
+      if (!confirmDownload) return;
+
+      const response = await dashboardAPI.downloadDeadlineFiles(selectedDeadline.id);
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${selectedDeadline.title.replace(/\s+/g, '_')}_Submissions.zip`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error('Download failed:', err);
+      if (err.response && err.response.status === 404) {
+        alert('No files available to download.');
+      } else {
+        alert('Failed to download ZIP archive.');
+      }
+    }
   };
 
   // --- RENDER ---
@@ -337,6 +402,14 @@ const Folder = () => {
             {selectedDeadline?.description && ` • ${selectedDeadline.description}`}
           </p>
         </div>
+        <button className="btn btn-outline btn-sm ml-auto mr-2" onClick={handleExportCSV}>
+          <Download size={16} className="mr-2" />
+          Export Overview
+        </button>
+        <button className="btn btn-primary btn-sm" onClick={handleDownloadZip}>
+          <Archive size={16} className="mr-2" />
+          Download All Files
+        </button>
       </div>
 
       {/* Filter / Search */}
@@ -557,8 +630,7 @@ const Folder = () => {
                     </div>
                   ) : (
                     <div className="document-text-preview">
-                      {previewSubmission.analysis_result.document_text.substring(0, 500)}
-                      {previewSubmission.analysis_result.document_text.length > 500 && '...'}
+                      {previewSubmission.analysis_result.document_text}
                     </div>
                   )}
 

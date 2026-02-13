@@ -12,6 +12,7 @@ import {
   AlertCircle,
   CheckCircle,
   TrendingUp,
+  ExternalLink
 } from 'lucide-react';
 import Card from '../components/common/Card/Card';
 import Badge from '../components/common/Badge/Badge';
@@ -70,6 +71,43 @@ const SubmissionDetailView = () => {
     navigate(-1);
   };
 
+  const handleViewFile = async () => {
+    // If it's a Google Drive link, open it directly in a new tab (best for GDocs)
+    if (submission.google_drive_link) {
+      window.open(submission.google_drive_link, '_blank');
+      return;
+    }
+
+    try {
+      // For file uploads (or fallback), we download/view via API
+      const response = await dashboardAPI.getSubmissionFile(id);
+
+      // Create a blob from the response
+      const file = new Blob([response.data], { type: submission.mime_type || 'application/pdf' });
+      const fileURL = URL.createObjectURL(file);
+      window.open(fileURL, '_blank');
+    } catch (err) {
+      console.error('Error viewing file:', err);
+
+      let errorMessage = 'Failed to open file. It might not exist or there was an error.';
+
+      // Check if the error response is a Blob (since we requested blob)
+      if (err.response && err.response.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const json = JSON.parse(text);
+          if (json.error) errorMessage = json.error;
+        } catch (e) {
+          // ignore parse error
+        }
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      }
+
+      alert(errorMessage);
+    }
+  };
+
   const analysis = submission.analysis_result;
 
   return (
@@ -86,6 +124,11 @@ const SubmissionDetailView = () => {
             {submission.status}
           </Badge>
         </div>
+
+        <button className="btn btn-primary btn-sm" onClick={handleViewFile} title="View original file">
+          <ExternalLink size={16} className="mr-2" />
+          View Full File
+        </button>
       </div>
 
       <div className="detail-grid">
@@ -166,8 +209,8 @@ const SubmissionDetailView = () => {
               <div className="info-item">
                 <span className="info-label">Created Date</span>
                 <span className="info-value">
-                  {analysis.document_metadata.creation_date
-                    ? new Date(analysis.document_metadata.creation_date).toLocaleString([], {
+                  {(analysis.document_metadata.created_date || analysis.document_metadata.creation_date)
+                    ? new Date(analysis.document_metadata.created_date || analysis.document_metadata.creation_date).toLocaleString([], {
                       year: 'numeric',
                       month: 'numeric',
                       day: 'numeric',
@@ -180,8 +223,8 @@ const SubmissionDetailView = () => {
               <div className="info-item">
                 <span className="info-label">Last Modified</span>
                 <span className="info-value">
-                  {analysis.document_metadata.last_modified_date
-                    ? new Date(analysis.document_metadata.last_modified_date).toLocaleString([], {
+                  {(analysis.document_metadata.modified_date || analysis.document_metadata.last_modified_date)
+                    ? new Date(analysis.document_metadata.modified_date || analysis.document_metadata.last_modified_date).toLocaleString([], {
                       year: 'numeric',
                       month: 'numeric',
                       day: 'numeric',
@@ -215,11 +258,12 @@ const SubmissionDetailView = () => {
                   } else {
                     // Fallback logic
                     // Add author with creation date
+                    // Add author with creation date
                     if (analysis.document_metadata.author) {
                       contributors.push({
                         name: analysis.document_metadata.author,
                         role: 'Author',
-                        date: analysis.document_metadata.creation_date,
+                        date: analysis.document_metadata.created_date || analysis.document_metadata.creation_date,
                       });
                     }
 
@@ -229,7 +273,7 @@ const SubmissionDetailView = () => {
                       contributors.push({
                         name: analysis.document_metadata.last_editor,
                         role: 'Editor',
-                        date: analysis.document_metadata.last_modified_date,
+                        date: analysis.document_metadata.modified_date || analysis.document_metadata.last_modified_date,
                       });
                     }
                   }
@@ -268,12 +312,85 @@ const SubmissionDetailView = () => {
           </Card>
         )}
 
+        {/* Evaluation Rubric Reference */}
+        {submission.deadline?.rubric && (
+          <Card title="Evaluation Rubric" className="h-full">
+            <div className="mb-4">
+              <h4 className="font-bold text-gray-800 text-lg mb-1">{submission.deadline.rubric.title}</h4>
+              <p className="text-sm text-gray-500">{submission.deadline.rubric.description}</p>
+            </div>
 
-        {/* AI Summary */}
-        {analysis?.ai_summary && (
-          <Card title="AI-Generated Summary" className="card-full-width">
-            <p className="ai-summary">{analysis.ai_summary}</p>
+            <div className="overflow-hidden border border-gray-200 rounded-lg">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/2">Criteria</th>
+                    <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Rating</th>
+                    <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Score (0-10)</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {submission.deadline.rubric.criteria?.map((c, idx) => {
+                    // Find matching AI evaluation
+                    const result = analysis?.ai_insights?.rubric_evaluation?.find(
+                      r => r.criteria === c.name || (r.criteria && c.name && r.criteria.toLowerCase().includes(c.name.toLowerCase()))
+                    );
+
+                    return (
+                      <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 text-sm text-gray-900 align-top">
+                          <div className="font-medium text-gray-900">{c.name}</div>
+                          <div className="text-xs text-gray-500 mt-1 mb-2" title={c.description}>{c.description}</div>
+                          {result?.feedback && (
+                            <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded border border-gray-100 italic">
+                              "{result.feedback}"
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 align-top text-center">
+                          {result?.rating ? (
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${result.rating === 'High' ? 'bg-green-100 text-green-800' :
+                                result.rating === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-red-100 text-red-800'
+                              }`}>
+                              {result.rating}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 align-top text-center font-semibold text-gray-700">
+                          {result?.score !== undefined ? result.score : '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </Card>
+        )}
+
+        {/* AI Summary and Evaluation */}
+        {analysis?.ai_summary && (
+          <div className="card-full-width space-y-6">
+            <Card title="AI-Generated Summary">
+              <p className="ai-summary">{analysis.ai_summary}</p>
+            </Card>
+
+            {/* Rubric Evaluation Display */}
+            {/* Rubric Evaluation Display (Summary Only) */}
+            {analysis.ai_insights?.overall_feedback && (
+              <Card title="AI Evaluation Summary">
+                <p className="text-gray-700 italic border-l-4 border-blue-500 pl-4 py-2 bg-blue-50 rounded-r-md">
+                  "{analysis.ai_insights.overall_feedback}"
+                </p>
+              </Card>
+            )}
+
+            {/* Legacy Overall Score (Only keep if no rating system is used? Or remove entirely if user hates it?) */}
+            {/* Keeping it hidden for now based on user request to "fix the rubric" to be low/med/high */}
+          </div>
         )}
 
         {/* Validation Warnings */}

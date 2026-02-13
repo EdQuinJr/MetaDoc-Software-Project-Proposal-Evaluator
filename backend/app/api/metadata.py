@@ -138,6 +138,59 @@ def analyze_submission(submission_id):
                 'processing_duration': processing_duration
             }
         )
+
+        # ---------------------------------------------------------
+        # [Auto-Trigger] Perform NLP & AI Analysis Immediately
+        # ---------------------------------------------------------
+        try:
+            from app.services import NLPService
+            nlp_service = NLPService()
+            
+            # Local NLP
+            local_results = nlp_service.perform_local_nlp_analysis(text)
+            
+            # AI Analysis (Enabled by default)
+            context = {
+                'assignment_type': getattr(submission.deadline, 'assignment_type', None) if submission.deadline else None,
+                'course_code': getattr(submission.deadline, 'course_code', None) if submission.deadline else None
+            }
+            
+            rubric_data = None
+            if submission.deadline and hasattr(submission.deadline, 'rubric') and submission.deadline.rubric:
+                 rubric_data = submission.deadline.rubric.to_dict()
+                 current_app.logger.info(f"Rubric found for submission {submission.id}, forcing AI evaluation with criteria.")
+
+            ai_summary, ai_error = nlp_service.generate_ai_summary(text, context, rubric=rubric_data)
+            
+            # Consolidate
+            consolidated_results, _ = nlp_service.consolidate_nlp_results(local_results, ai_summary)
+            
+            # Update Analysis Result
+            analysis_result.nlp_results = consolidated_results
+            
+            # Update Specific Fields
+            if 'readability' in local_results and local_results['readability'] and 'scores' in local_results['readability']:
+                analysis_result.flesch_kincaid_score = local_results['readability']['scores'].get('flesch_kincaid_grade')
+                analysis_result.readability_grade = local_results['readability'].get('reading_level')
+            
+            if 'named_entities' in local_results:
+                analysis_result.named_entities = local_results['named_entities']
+            
+            if 'token_analysis' in local_results and local_results['token_analysis'] and 'top_terms' in local_results['token_analysis']:
+                analysis_result.top_terms = local_results['token_analysis']['top_terms']
+            
+            if ai_summary:
+                analysis_result.ai_summary = ai_summary.get('summary')
+                analysis_result.ai_insights = ai_summary
+            
+            db.session.commit()
+            AuditService.log_submission_event('nlp_analysis_completed', submission)
+            current_app.logger.info("Auto-triggered NLP/AI analysis completed.")
+            
+        except Exception as nlp_e:
+            current_app.logger.error(f"Auto-triggered NLP failed: {nlp_e}")
+            # Do not fail the whole request, as metadata is successful
+        # ---------------------------------------------------------
         
         return jsonify({
             'message': 'Metadata analysis completed successfully',

@@ -293,6 +293,63 @@ def upload_file():
                     db.session.commit()
                     
                     current_app.logger.info(f"Analysis completed for submission {submission.id}")
+
+                    # [INTEGRATION] Trigger AI Analysis IMMEDIATELY
+                    try:
+                        from app.api.nlp import get_nlp_service
+                        nlp_service = get_nlp_service()
+                        
+                        # 1. Local NLP
+                        local_results = nlp_service.perform_local_nlp_analysis(text)
+                        
+                        # 2. AI Analysis (with Rubric if available)
+                        # Check for deadline and rubric
+                        rubric_data = None
+                        context = {}
+                        
+                        if submission.deadline_id:
+                            from app.models import Deadline
+                            deadline = Deadline.query.get(submission.deadline_id)
+                            if deadline:
+                                context = {
+                                    'assignment_type': deadline.assignment_type,
+                                    'course_code': deadline.course_code
+                                }
+                                if deadline.rubric:
+                                    rubric_data = deadline.rubric.to_dict()
+                                    current_app.logger.info(f"Using rubric '{deadline.rubric.title}' for AI analysis")
+                        
+                        # Generate Summary & Rating
+                        ai_summary, ai_error = nlp_service.generate_ai_summary(text, context, rubric=rubric_data)
+                        
+                        if ai_error:
+                            current_app.logger.warning(f"AI analysis warning: {ai_error}")
+                        
+                        # 3. Consolidate
+                        # Note: We need to handle consolidation manually or call the service method if available
+                        # Checking nlp_service for consolidate method
+                        consolidated_results = local_results
+                        if hasattr(nlp_service, 'consolidate_nlp_results'):
+                            consolidated_results, _ = nlp_service.consolidate_nlp_results(local_results, ai_summary)
+                        
+                        # 4. Save to DB
+                        analysis.nlp_results = consolidated_results
+                        if ai_summary:
+                            analysis.ai_summary = ai_summary.get('summary')
+                            analysis.ai_insights = ai_summary
+                            
+                        # Update specific fields
+                        if 'readability' in local_results and local_results['readability']:
+                             analysis.flesch_kincaid_score = local_results['readability'].get('grade_level')
+                             analysis.readability_grade = local_results['readability'].get('reading_level')
+                             
+                        db.session.commit()
+                        current_app.logger.info(f"AI Rating & NLP analysis completed for submission {submission.id}")
+                        
+                    except Exception as nlp_e:
+                        current_app.logger.error(f"Post-upload AI analysis failed: {nlp_e}")
+                        # Do not fail request, just log
+
         except Exception as e:
             current_app.logger.error(f"Auto-analysis failed: {e}")
             # Don't fail the upload, just log the error
@@ -603,6 +660,57 @@ def submit_drive_link():
                     db.session.commit()
                     
                     current_app.logger.info(f"Analysis completed for submission {submission.id}")
+                    
+                    # [INTEGRATION] Trigger AI Analysis IMMEDIATELY (Drive Link)
+                    try:
+                        from app.api.nlp import get_nlp_service
+                        nlp_service = get_nlp_service()
+                        
+                        # 1. Local NLP
+                        local_results = nlp_service.perform_local_nlp_analysis(text)
+                        
+                        # 2. AI Analysis (with Rubric if available)
+                        rubric_data = None
+                        context = {}
+                        
+                        if submission.deadline_id:
+                            from app.models import Deadline
+                            deadline = Deadline.query.get(submission.deadline_id)
+                            if deadline:
+                                context = {
+                                    'assignment_type': deadline.assignment_type,
+                                    'course_code': deadline.course_code
+                                }
+                                if deadline.rubric:
+                                    rubric_data = deadline.rubric.to_dict()
+                                    current_app.logger.info(f"Using rubric '{deadline.rubric.title}' for AI analysis (Drive)")
+                        
+                        # Generate Summary & Rating
+                        ai_summary, ai_error = nlp_service.generate_ai_summary(text, context, rubric=rubric_data)
+                        
+                        if ai_error:
+                             current_app.logger.warning(f"AI analysis warning: {ai_error}")
+
+                        # 3. Consolidate
+                        consolidated_results = local_results
+                        if hasattr(nlp_service, 'consolidate_nlp_results'):
+                            consolidated_results, _ = nlp_service.consolidate_nlp_results(local_results, ai_summary)
+                        
+                        # 4. Save to DB
+                        analysis.nlp_results = consolidated_results
+                        if ai_summary:
+                            analysis.ai_summary = ai_summary.get('summary')
+                            analysis.ai_insights = ai_summary
+
+                        if 'readability' in local_results and local_results['readability']:
+                             analysis.flesch_kincaid_score = local_results['readability'].get('grade_level')
+                             analysis.readability_grade = local_results['readability'].get('reading_level')
+
+                        db.session.commit()
+                        current_app.logger.info(f"AI Rating & NLP analysis completed for submission {submission.id} (Drive)")
+                        
+                    except Exception as nlp_e:
+                        current_app.logger.error(f"Post-upload AI analysis failed (Drive): {nlp_e}")
         except Exception as e:
             current_app.logger.error(f"Auto-analysis failed: {e}")
             # Don't fail the upload, just log the error

@@ -22,15 +22,7 @@ from datetime import datetime
 from collections import Counter
 from flask import Blueprint, request, jsonify, current_app
 
-# NLP Libraries
-import spacy
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize, sent_tokenize
-import textstat
-
-# AI Integration
-import google.generativeai as genai
+# NLP Libraries and AI handled in service layer
 
 from app.core.extensions import db
 from app.models import Submission, AnalysisResult
@@ -40,7 +32,14 @@ from app.services import NLPService
 nlp_bp = Blueprint('nlp', __name__)
 
 # Initialize service
-nlp_service = NLPService()
+# Initialize service
+nlp_service = None
+
+def get_nlp_service():
+    global nlp_service
+    if nlp_service is None:
+        nlp_service = NLPService()
+    return nlp_service
 
 @nlp_bp.route('/analyze/<submission_id>', methods=['POST'])
 def analyze_nlp(submission_id):
@@ -66,7 +65,10 @@ def analyze_nlp(submission_id):
         
         # Optional AI analysis
         ai_summary = None
-        enable_ai = request.json.get('enable_ai_summary', False) if request.json else False
+        # Default to True to ensure Gemini is used, unless explicitly disabled
+        enable_ai = True
+        if request.json and 'enable_ai_summary' in request.json:
+            enable_ai = request.json.get('enable_ai_summary')
         
         if enable_ai and get_nlp_service().gemini_initialized:
             context = {
@@ -74,7 +76,13 @@ def analyze_nlp(submission_id):
                 'course_code': getattr(submission.deadline, 'course_code', None) if submission.deadline else None
             }
             
-            ai_summary, ai_error = get_nlp_service().generate_ai_summary(text, context)
+            # Fetch Rubric if associated with deadline
+            rubric_data = None
+            if submission.deadline and hasattr(submission.deadline, 'rubric') and submission.deadline.rubric:
+                 rubric_data = submission.deadline.rubric.to_dict()
+                 current_app.logger.info(f"Rubric found for submission {submission.id}, forcing AI evaluation with criteria.")
+            
+            ai_summary, ai_error = get_nlp_service().generate_ai_summary(text, context, rubric=rubric_data)
             if ai_error:
                 current_app.logger.warning(f"AI summary failed: {ai_error}")
         

@@ -85,15 +85,22 @@ def oauth_callback():
         
         # Redirect to frontend with session token and user data
         import urllib.parse
+        from app.schemas.dto import UserDTO
+        
         frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:5173')
-        user_json = urllib.parse.quote(json.dumps(result['user']))
+        # Serialize User object to dict before JSON dumping
+        user_dict = UserDTO.serialize(result['user'])
+        user_json = urllib.parse.quote(json.dumps(user_dict))
+        
         return redirect(
             f"{frontend_url}/auth/callback?session_token={result['session_token']}&user={user_json}"
         )
         
     except Exception as e:
+        import traceback
         current_app.logger.error(f"OAuth callback failed: {e}")
-        return jsonify({'error': 'Authentication failed'}), 500
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({'error': f'Authentication failed: {str(e)}'}), 500
 
 @auth_bp.route('/validate', methods=['POST'])
 def validate_session():

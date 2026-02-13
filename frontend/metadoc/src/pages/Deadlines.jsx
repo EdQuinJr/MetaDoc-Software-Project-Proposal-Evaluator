@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { dashboardAPI } from '../services/api';
+import { dashboardAPI, rubricAPI } from '../services/api'; // Import rubricAPI
 import { Calendar, Plus, Trash2, Edit2, AlertCircle, CheckCircle, AlertTriangle, X, Search } from 'lucide-react';
 import '../styles/Deadlines.css';
 
@@ -12,6 +12,10 @@ const Deadlines = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  // Rubric State
+  const [rubrics, setRubrics] = useState([]);
+  const [selectedRubric, setSelectedRubric] = useState("");
 
   // Filter & Sort State
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,6 +30,7 @@ const Deadlines = () => {
 
   useEffect(() => {
     fetchDeadlines();
+    fetchRubrics(); // Fetch rubrics on load
   }, []);
 
   const fetchDeadlines = async () => {
@@ -38,6 +43,15 @@ const Deadlines = () => {
       setError('Failed to load deadlines');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRubrics = async () => {
+    try {
+      const response = await rubricAPI.getRubrics();
+      setRubrics(response.data.rubrics || []);
+    } catch (err) {
+      console.error('Failed to fetch rubrics:', err);
     }
   };
 
@@ -54,18 +68,24 @@ const Deadlines = () => {
       return;
     }
 
+    const payload = {
+      ...formData,
+      rubric_id: selectedRubric || null
+    };
+
     try {
       if (editingDeadline) {
         // Update existing deadline
-        await dashboardAPI.updateDeadline(editingDeadline.id, formData);
+        await dashboardAPI.updateDeadline(editingDeadline.id, payload);
       } else {
         // Create new deadline
-        await dashboardAPI.createDeadline(formData);
+        await dashboardAPI.createDeadline(payload);
         setShowSuccessModal(true); // Show success modal for creation
       }
 
       setShowModal(false);
       setFormData({ title: '', description: '', deadline_datetime: '' });
+      setSelectedRubric("");
       setEditingDeadline(null);
       setFormError(null);
       fetchDeadlines();
@@ -78,6 +98,7 @@ const Deadlines = () => {
 
   const handleEdit = (deadline) => {
     setEditingDeadline(deadline);
+    setSelectedRubric(deadline.rubric_id || "");
 
     // Format datetime for input (local timezone)
     const dt = new Date(deadline.deadline_datetime);
@@ -97,6 +118,7 @@ const Deadlines = () => {
     setShowModal(true);
   };
 
+  // ... (unchanged helper functions: handleDeleteClick, handleDeleteConfirm, handleDeleteCancel, getTimeRemaining, getFilteredDeadlines) ...
   const handleDeleteClick = (deadline) => {
     setDeleteTarget(deadline);
     setShowDeleteModal(true);
@@ -124,6 +146,7 @@ const Deadlines = () => {
   const handleNewDeadline = () => {
     setEditingDeadline(null);
     setFormData({ title: '', description: '', deadline_datetime: '' });
+    setSelectedRubric("");
     setFormError(null);
     setShowModal(true);
   };
@@ -284,7 +307,14 @@ const Deadlines = () => {
                       <p className="deadline-description">{deadline.description}</p>
                     )}
 
-                    <div className="deadline-meta">
+                    {/* Rubric Badge */}
+                    {deadline.rubric_id && (
+                      <div className="mt-2 text-xs text-blue-600 bg-blue-50 inline-block px-2 py-1 rounded border border-blue-100">
+                        With Evaluation Rubric
+                      </div>
+                    )}
+
+                    <div className="deadline-meta mt-4">
                       <div className="deadline-date">
                         <Calendar size={16} />
                         <span>
@@ -355,6 +385,26 @@ const Deadlines = () => {
                 </div>
 
                 <div className="form-group">
+                  <label htmlFor="rubric">Evaluation Rubric (Optional)</label>
+                  <select
+                    id="rubric"
+                    className="form-control"
+                    value={selectedRubric}
+                    onChange={(e) => setSelectedRubric(e.target.value)}
+                  >
+                    <option value="">-- No Rubric --</option>
+                    {rubrics.map(rubric => (
+                      <option key={rubric.id} value={rubric.id}>
+                        {rubric.title}
+                      </option>
+                    ))}
+                  </select>
+                  <small className="form-text text-gray-500">
+                    Select a rubric to enable AI-guided scoring for submissions.
+                  </small>
+                </div>
+
+                <div className="form-group">
                   <label htmlFor="deadline_datetime">Deadline Date & Time *</label>
                   <input
                     type="datetime-local"
@@ -379,7 +429,7 @@ const Deadlines = () => {
         )
       }
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal (unchanged logic) */}
       {
         showDeleteModal && deleteTarget && (
           <div className="modal-overlay" onClick={handleDeleteCancel}>

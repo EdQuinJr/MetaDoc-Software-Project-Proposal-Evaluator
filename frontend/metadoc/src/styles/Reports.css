@@ -1,0 +1,107 @@
+/* Reports.css - Compact & Professional Update */
+
+.reports-page {
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.report-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    /* gray-200 */
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    border-radius: 0.5rem;
+    /* 8px - slightly tighter radius */
+    overflow: hidden;
+}
+
+/* Button override */
+.btn-export {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-primary-action {
+    background-color: #4f46e5;
+    color: white;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary-action:hover {
+    background-color: #4338ca;
+}
+
+/* Table Compact Layout */
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.report-table th {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    font-weight: 600;
+    padding: 0.75rem 1rem;
+    background-color: #f9fafb;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.report-table td {
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+}
+
+.report-table tr:hover td {
+    background-color: #f8fafc;
+}
+
+/* Badges - Tighter */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.status-badge.completed {
+    background-color: #ecfdf5;
+    color: #047857;
+}
+
+.status-badge.pending {
+    background-color: #fffbeb;
+    color: #b45309;
+}
+
+.status-badge.failed {
+    background-color: #fef2f2;
+    color: #b91c1c;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+    .grid-cols-3 {
+        grid-template-columns: 1fr;
+        /* Stack on smaller screens */
+    }
+}

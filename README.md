@@ -45,6 +45,9 @@ source venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
+# Or install manually if requirements.txt is missing:
+# pip install Flask==3.0.0 Flask-SQLAlchemy==3.1.1 Flask-Migrate==4.0.5 Flask-Cors==4.0.0 python-dotenv==1.0.0 google-api-python-client==2.108.0 google-auth-httplib2==0.1.1 google-auth-oauthlib==1.1.0 google-generativeai==0.3.1 PyMySQL==1.1.0 cryptography==41.0.7 PyJWT==2.8.0 redis==5.0.1 celery==5.3.6 reportlab==4.0.8 pandas==2.1.4 textstat==0.7.3 spacy==3.7.2 nltk==3.8.1 python-magic-bin==0.4.14 werkzeug==3.0.1
+
 # Configure environment
 copy .env.example .env  # Windows
 # cp .env.example .env  # Linux/Mac
@@ -199,8 +202,7 @@ MetaDoc-Software-Project-Proposal-Evaluator/
 │   └── metadoc/
 │       ├── src/
 │       │   ├── pages/             # Page components
-│       │   │   ├── TokenBasedSubmission.jsx    # Public submission form
-│       │   │   ├── AuthenticatedSubmission.jsx # Logged-in submission
+│       │   │   ├── TokenBasedSubmission.jsx    # Token-based submission form
 │       │   │   ├── SubmissionDetailView.jsx    # Submission details
 │       │   │   ├── Dashboard.jsx               # Professor dashboard
 │       │   │   ├── Folder.jsx                  # Folder view

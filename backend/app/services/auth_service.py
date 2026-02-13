@@ -5,6 +5,11 @@ Extracted from api/auth.py to follow proper service layer architecture.
 """
 
 import secrets
+import os
+
+# Force insecure transport for local development (must be set before oauth imports)
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
 from datetime import datetime, timedelta
 from flask import current_app, session
 from google_auth_oauthlib.flow import Flow
@@ -105,10 +110,15 @@ class AuthService:
             flow.fetch_token(code=authorization_code)
             
             credentials = flow.credentials
+            
+            # Store credentials in session for Drive API calls
+            session['google_credentials'] = credentials.to_json()
+            
             user_info = id_token.verify_oauth2_token(
                 credentials.id_token,
                 google_requests.Request(),
-                self.google_client_id
+                self.google_client_id,
+                clock_skew_in_seconds=60
             )
             
             email = user_info.get('email')
@@ -116,10 +126,15 @@ class AuthService:
             picture = user_info.get('picture')
             google_id = user_info.get('sub')
             
-            if self.allowed_domains:
+            # Domain validation logic
+            if self.allowed_domains and self.allowed_domains != ['']:
                 domain = email.split('@')[1] if '@' in email else ''
-                if domain not in self.allowed_domains:
-                    return None, f"Email domain '{domain}' not allowed"
+                # Always allow gmail.com and the specific allowed domains
+                allowed = [d.strip().lower() for d in self.allowed_domains if d.strip()]
+                allowed.append('gmail.com')
+                
+                if domain not in allowed:
+                    return None, f"Email domain '{domain}' not allowed. Allowed domains: {', '.join(allowed)}"
             
             user_type = session.get('user_type', 'professor')
             role = UserRole.PROFESSOR if user_type == 'professor' else UserRole.STUDENT

@@ -21,6 +21,7 @@ class Deadline(BaseModel):
     
     # Foreign key
     professor_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    rubric_id = db.Column(db.String(36), db.ForeignKey('rubrics.id'), nullable=True)
     
     # Relationships - cascade delete submissions when deadline is deleted
     submissions = db.relationship('Submission', backref='deadline', lazy=True, cascade='all, delete-orphan')
@@ -38,5 +39,6 @@ class Deadline(BaseModel):
             'course_code': self.course_code,
             'assignment_type': self.assignment_type,
             'professor_id': self.professor_id,
+            'rubric_id': self.rubric_id,
             'created_at': self.created_at.isoformat()
         }

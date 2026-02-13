@@ -88,10 +88,34 @@ const TokenBasedSubmission = () => {
     if (fileInput) fileInput.value = '';
   };
 
+  const formatStudentId = (value) => {
+    // Remove all non-digits
+    const digits = value.replace(/\D/g, '');
+
+    // Format as XX-XXXX-XXX (e.g., 22-1686-452)
+    if (digits.length <= 2) {
+      return digits;
+    } else if (digits.length <= 6) {
+      return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    } else {
+      return `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6, 9)}`;
+    }
+  };
+
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
     if (!file) {
       setError('Please select a file');
+      return;
+    }
+
+    if (!uploadData.student_name.trim()) {
+      setError('Please enter your full name');
+      return;
+    }
+
+    if (!uploadData.student_id.trim()) {
+      setError('Please enter your student ID');
       return;
     }
 
@@ -178,6 +202,16 @@ const TokenBasedSubmission = () => {
     e.preventDefault();
     if (!driveData.drive_link) {
       setError('Please enter a Google Drive link');
+      return;
+    }
+
+    if (!driveData.student_name.trim()) {
+      setError('Please enter your full name');
+      return;
+    }
+
+    if (!driveData.student_id.trim()) {
+      setError('Please enter your student ID');
       return;
     }
 
@@ -362,7 +396,7 @@ const TokenBasedSubmission = () => {
                   label="Student ID Number"
                   value={uploadData.student_id}
                   onChange={(e) =>
-                    setUploadData({ ...uploadData, student_id: e.target.value })
+                    setUploadData({ ...uploadData, student_id: formatStudentId(e.target.value) })
                   }
                   placeholder="e.g., 22-1686-452"
                 />
@@ -485,7 +519,7 @@ const TokenBasedSubmission = () => {
                   label="STUDENT ID NUMBER"
                   value={driveData.student_id}
                   onChange={(e) =>
-                    setDriveData({ ...driveData, student_id: e.target.value })
+                    setDriveData({ ...driveData, student_id: formatStudentId(e.target.value) })
                   }
                   placeholder="e.g., 22-1686-452"
                 />

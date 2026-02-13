@@ -1,0 +1,212 @@
+/* Reusing variables and styles from Deadlines.css/App.css */
+/* Ensure standard spacing and colors are used */
+
+.rubrics-page {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.rubrics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-xl);
+}
+
+.rubrics-header h1 {
+  margin-bottom: var(--spacing-sm);
+  font-size: 2rem;
+  color: var(--color-gray-900);
+}
+
+.rubrics-subtitle {
+  color: var(--color-gray-600);
+  font-size: 1rem;
+}
+
+.rubrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.rubric-card {
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  transition: all 0.2s;
+  border: 1px solid var(--color-gray-200);
+  display: flex;
+  flex-direction: column;
+}
+
+.rubric-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+  border-color: var(--color-maroon-light);
+}
+
+.rubric-card-header {
+  padding: var(--spacing-lg);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  /* Use maroon gradient to match Deadlines theme */
+  background: linear-gradient(135deg, var(--color-maroon) 0%, var(--color-maroon-light) 100%);
+  color: white;
+}
+
+.rubric-title-group {
+  flex: 1;
+  margin-right: var(--spacing-md);
+}
+
+.rubric-card h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: white;
+  margin-bottom: var(--spacing-xs);
+  line-height: 1.4;
+}
+
+.rubric-description {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rubric-card-body {
+  padding: var(--spacing-lg);
+  flex: 1;
+}
+
+.criteria-preview {
+  background-color: #FAFAFA;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  border: 1px solid #F0F0F0;
+}
+
+.criteria-preview-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-gray-500);
+  font-weight: 600;
+  margin-bottom: var(--spacing-sm);
+}
+
+.criteria-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.criterion-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  color: var(--color-gray-700);
+}
+
+.criterion-weight {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+.weight-high {
+  background-color: #FEE2E2;
+  color: #991B1B;
+}
+
+.weight-medium {
+  background-color: #FEF3C7;
+  color: #92400E;
+}
+
+.weight-low {
+  background-color: #D1FAE5;
+  color: #065F46;
+}
+
+.rubric-card-footer {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--color-gray-100);
+  font-size: 0.75rem;
+  color: var(--color-gray-400);
+  text-align: right;
+  background-color: white;
+}
+
+/* Edit Button */
+/* Edit Button */
+.btn-edit-rubric {
+  color: rgba(255, 255, 255, 0.7);
+  transition: all 0.2s;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-edit-rubric:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Modal Styling Overrides/Additions */
+.criteria-input-group {
+  background-color: var(--color-gray-50);
+  border: 1px solid var(--color-gray-200);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  position: relative;
+  transition: border-color 0.2s;
+}
+
+.criteria-input-group:hover {
+  border-color: var(--color-gray-300);
+}
+
+.btn-remove-criterion {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: var(--color-gray-400);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.btn-remove-criterion:hover {
+  color: var(--color-error);
+}
+
+.add-criterion-btn {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-maroon);
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.add-criterion-btn:hover {
+  text-decoration: underline;
+}
