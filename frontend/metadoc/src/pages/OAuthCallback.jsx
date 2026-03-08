@@ -45,14 +45,23 @@ const OAuthCallback = () => {
         handleOAuthCallback(sessionToken, userData);
 
         setStatus('success');
-        setMessage('Login successful! Redirecting to dashboard...');
+        setMessage('Login successful! Redirecting...');
 
-        // Always redirect to dashboard (professor only)
+        // Check for specific redirect after auth
+        const redirectPath = localStorage.getItem('redirect_after_auth');
+        localStorage.removeItem('redirect_after_auth'); // Clean up
         localStorage.removeItem('user_type'); // Clean up
 
         setTimeout(() => {
-          navigate('/dashboard');
-        }, 3000);
+          if (redirectPath) {
+            navigate(redirectPath);
+          } else if (userData.role === 'STUDENT' || userData.role === 'student') {
+            // Students are directed to the student portal
+            navigate('/student/login');
+          } else {
+            navigate('/dashboard');
+          }
+        }, 2000);
       } catch (error) {
         console.error('OAuth callback error:', error);
         setStatus('error');

@@ -4,6 +4,10 @@ NLP Analysis Service - Handles natural language processing and readability analy
 Extracted from api/nlp.py to follow proper service layer architecture.
 """
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+
+
 try:
     import spacy
 except ImportError:

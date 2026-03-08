@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   User,
+  Users,
   BookCheck,
 } from 'lucide-react';
 import logo from '../../assets/images/logo.png';
@@ -31,6 +32,7 @@ const DashboardLayout = ({ children }) => {
     { path: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
     { path: '/dashboard/folders', icon: FileText, label: 'Folders' },
     { path: '/dashboard/deadlines', icon: Calendar, label: 'Deadlines' },
+    { path: '/dashboard/class-record', icon: Users, label: 'Class Record' },
     { path: '/dashboard/rubrics', icon: BookCheck, label: 'Rubrics' },
     { path: '/dashboard/reports', icon: FileBarChart, label: 'Reports' },
   ];

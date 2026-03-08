@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI } from '../services/api';
+import { getMsalInstance } from '../authConfig';
 
 const AuthContext = createContext(null);
 
@@ -20,7 +21,7 @@ export const AuthProvider = ({ children }) => {
     // Check for existing session on mount
     const token = localStorage.getItem('session_token');
     const savedUser = localStorage.getItem('user');
-    
+
     if (token && savedUser) {
       setSessionToken(token);
       setUser(JSON.parse(savedUser));
@@ -49,14 +50,40 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (userType = 'professor') => {
+  const login = async (userType = 'professor', provider = 'google') => {
     try {
-      // Store user type to determine redirect after OAuth
+      // Store user type and provider to determine redirect after OAuth
       localStorage.setItem('user_type', userType);
-      
-      const response = await authAPI.initiateLogin(userType);
+      localStorage.setItem('auth_provider', provider);
+
+      if (provider === 'microsoft') {
+        // Use client-side MSAL (secret-less PKCE flow)
+        const instance = await getMsalInstance();
+        const loginResponse = await instance.loginPopup({
+          scopes: ["openid", "profile", "email", "User.Read"],
+          prompt: "select_account"
+        });
+
+        if (loginResponse && loginResponse.idToken) {
+          // Send ID token to backend for verification and session creation
+          const response = await authAPI.microsoftTokenLogin(loginResponse.idToken, userType);
+          if (response.data.session_token) {
+            handleOAuthCallback(response.data.session_token, response.data.user);
+
+            // Check for specific redirect after auth
+            const redirectPath = localStorage.getItem('redirect_after_auth');
+            if (redirectPath) {
+              localStorage.removeItem('redirect_after_auth');
+              window.location.href = redirectPath;
+            }
+          }
+        }
+        return;
+      }
+
+      const response = await authAPI.initiateLogin(userType, provider);
       if (response.data.auth_url) {
-        // Redirect to Google OAuth
+        // Redirect to OAuth provider
         window.location.href = response.data.auth_url;
       }
     } catch (error) {

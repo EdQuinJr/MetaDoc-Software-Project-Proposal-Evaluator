@@ -302,3 +302,141 @@
     font-size: 1.5rem;
   }
 }
+
+/* Premium Login Gate Styles */
+.login-gate-wrapper {
+  animation: fadeIn 0.8s ease-out;
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+}
+
+.premium-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 24px !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  overflow: hidden !important;
+  transition: transform 0.3s ease !important;
+}
+
+.premium-card .card-content {
+  padding: var(--spacing-xl) !important;
+}
+
+.premium-card:hover {
+  transform: translateY(-5px);
+}
+
+.brand-logo-img {
+  height: 120px;
+  width: auto;
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.4));
+  object-fit: contain;
+  margin-bottom: var(--spacing-sm);
+}
+
+.gate-logo-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.gate-brand-name {
+  font-size: 3.5rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  margin: 0;
+  line-height: 1;
+}
+
+.metallic-text {
+  background: linear-gradient(to bottom,
+      #ffffff 20%,
+      #f3f3f3 40%,
+      #e1e1e1 50%,
+      #ffffff 60%,
+      #f9f9f9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.gate-brand-subtitle {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.1rem;
+  font-weight: 400;
+  margin-top: var(--spacing-xs);
+}
+
+.ms-icon-box {
+  width: 72px;
+  height: 72px;
+  background: linear-gradient(135deg, var(--color-maroon) 0%, var(--color-maroon-dark) 100%);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--spacing-lg);
+  color: white;
+  box-shadow: 0 10px 20px rgba(128, 0, 32, 0.2);
+}
+
+.ms-login-button {
+  background: white !important;
+  color: #323130 !important;
+  border: 1px solid #8a8886 !important;
+  border-radius: 12px !important;
+  padding: 14px 20px !important;
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  width: 100% !important;
+  cursor: pointer;
+}
+
+.ms-login-button:hover {
+  background: #f3f2f1 !important;
+  border-color: #323130 !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
+  transform: scale(1.01);
+}
+
+.ms-login-button:active {
+  background: #edebe9 !important;
+  transform: scale(0.99);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .login-gate-wrapper {
+    padding: 0 var(--spacing-md);
+  }
+
+  .gate-brand-name {
+    font-size: 2rem;
+  }
+}

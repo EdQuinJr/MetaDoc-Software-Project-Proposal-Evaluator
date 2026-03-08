@@ -12,7 +12,7 @@ import pytz
 from app.core.extensions import db
 from app.models import (
     Submission, AnalysisResult, Deadline, DocumentSnapshot,
-    SubmissionStatus, TimelinesssClassification
+    SubmissionStatus, TimelinesssClassification, Student
 )
 
 
@@ -350,3 +350,146 @@ class DashboardService:
         except Exception as e:
             current_app.logger.error(f"Deadlines list error: {e}")
             return None, str(e)
+
+    def get_students_for_deadline(self, deadline_id, user_id):
+        """Get all students registered/expected for a deadline (or all deadlines)"""
+        try:
+            if deadline_id == 'all':
+                # Get all deadlines for this professor
+                deadlines = Deadline.query.filter_by(professor_id=user_id).all()
+                deadline_ids = [d.id for d in deadlines]
+                deadline_map = {d.id: d.title for d in deadlines}
+                
+                if not deadline_ids:
+                    return [], None
+                    
+                students = Student.query.filter(Student.deadline_id.in_(deadline_ids)).order_by(Student.last_name).all()
+                
+                # Add deadline title to each student dict
+                student_dicts = []
+                for s in students:
+                    s_dict = s.to_dict()
+                    s_dict['deadline_title'] = deadline_map.get(s.deadline_id, 'Unknown')
+                    student_dicts.append(s_dict)
+                
+                return student_dicts, None
+
+            # Verify ownership for single deadline
+            deadline = Deadline.query.filter_by(id=deadline_id, professor_id=user_id).first()
+            if not deadline:
+                return None, "Deadline not found"
+            
+            students = Student.query.filter_by(deadline_id=deadline_id).order_by(Student.last_name).all()
+            return [s.to_dict() for s in students], None
+            
+        except Exception as e:
+            current_app.logger.error(f"Get students error: {e}")
+            return None, str(e)
+
+    def import_students(self, deadline_id, user_id, students_data):
+        """
+        Import a list of students for a deadline
+        students_data: list of dicts with {student_id, last_name, first_name, email}
+        """
+        try:
+            # Verify ownership
+            deadline = Deadline.query.filter_by(id=deadline_id, professor_id=user_id).first()
+            if not deadline:
+                return None, "Deadline not found"
+            
+            imported_count = 0
+            updated_count = 0
+            
+            for data in students_data:
+                student_id = data.get('student_id')
+                if not student_id:
+                    continue
+                
+                # Check for existing student in this class
+                existing = Student.query.filter_by(
+                    student_id=student_id,
+                    deadline_id=deadline_id
+                ).first()
+                
+                if existing:
+                    # Update info
+                    existing.last_name = data.get('last_name', existing.last_name)
+                    existing.first_name = data.get('first_name', existing.first_name)
+                    
+                    # Update email if provided, otherwise check format
+                    email = data.get('email')
+                    if not email and existing.last_name and existing.first_name:
+                        # Auto-generate format: lastname.firstname@gmail.com
+                        clean_last = existing.last_name.lower().replace(' ', '')
+                        clean_first = existing.first_name.lower().replace(' ', '')
+                        email = f"{clean_last}.{clean_first}@gmail.com"
+                    
+                    if email:
+                        email = email.lower().strip()
+                        if email.endswith('@gmail.com'):
+                            existing.email = email
+                        
+                    updated_count += 1
+                else:
+                    # Create new
+                    new_student = Student(
+                        student_id=student_id,
+                        last_name=data.get('last_name'),
+                        first_name=data.get('first_name'),
+                        deadline_id=deadline_id,
+                        is_registered=False
+                    )
+                    
+                    # Handle email for new student
+                    email = data.get('email')
+                    if not email and new_student.last_name and new_student.first_name:
+                        # Auto-generate format: lastname.firstname@gmail.com
+                        clean_last = new_student.last_name.lower().replace(' ', '')
+                        clean_first = new_student.first_name.lower().replace(' ', '')
+                        email = f"{clean_last}.{clean_first}@gmail.com"
+                    
+                    if email:
+                        email = email.lower().strip()
+                        if email.endswith('@gmail.com'):
+                            new_student.email = email
+                        
+                    db.session.add(new_student)
+                    imported_count += 1
+            
+            db.session.commit()
+            
+            if imported_count == 0 and updated_count == 0:
+                return None, "No valid student records were found in the provided data. Please ensure the column names match the expected format."
+
+            return {
+                'imported': imported_count,
+                'updated': updated_count,
+                'total': Student.query.filter_by(deadline_id=deadline_id).count()
+            }, None
+            
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Import students error: {e}")
+            return None, str(e)
+    def delete_student(self, student_id, deadline_id, user_id):
+        """Delete a student record from a deadline folder"""
+        try:
+            # Verify folder ownership
+            deadline = Deadline.query.filter_by(id=deadline_id, professor_id=user_id).first()
+            if not deadline:
+                return False, "Folder not found"
+            
+            # Find the specific student in this folder
+            student = Student.query.filter_by(student_id=student_id, deadline_id=deadline_id).first()
+            if not student:
+                return False, "Student record not found"
+            
+            db.session.delete(student)
+            db.session.commit()
+            
+            return True, None
+            
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Delete student error: {e}")
+            return False, str(e)

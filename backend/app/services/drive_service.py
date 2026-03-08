@@ -5,6 +5,7 @@ Extracted from api/submission.py to follow proper service layer architecture.
 """
 
 import os
+from datetime import datetime
 from flask import current_app
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -25,7 +26,16 @@ class DriveService:
                  import json
                  from google.oauth2.credentials import Credentials
                  creds_dict = json.loads(user_credentials_json)
-                 creds = Credentials.from_authorized_user_info(creds_dict)
+                 
+                 # Using standard constructor for higher reliability
+                 creds = Credentials(
+                     token=creds_dict.get('token'),
+                     refresh_token=creds_dict.get('refresh_token'),
+                     token_uri=creds_dict.get('token_uri', "https://oauth2.googleapis.com/token"),
+                     client_id=creds_dict.get('client_id'),
+                     client_secret=creds_dict.get('client_secret'),
+                     scopes=creds_dict.get('scopes', ['https://www.googleapis.com/auth/drive.readonly'])
+                 )
                  return build('drive', 'v3', credentials=creds)
              except Exception as e:
                  current_app.logger.error(f"Failed to create service from user credentials: {e}")
@@ -209,3 +219,122 @@ class DriveService:
             ],
             'help_url': '/help/drive-permissions'
         }
+
+    def fetch_revisions(self, file_id, user_credentials_json=None):
+        """Fetch all revisions for a Google Drive file"""
+        try:
+            service = self._get_drive_service(user_credentials_json)
+            if not service:
+                return None, "Google Drive service unavailable"
+            
+            # Use extreme precaution with fields
+            try:
+                # v3 revisions.list fields
+                results = service.revisions().list(
+                    fileId=file_id,
+                    fields='revisions(id,modifiedTime,lastModifyingUser)'
+                ).execute()
+            except HttpError as e:
+                current_app.logger.warning(f"Revision fetch failed with fields: {e}")
+                # Fallback to no fields (gets default set)
+                results = service.revisions().list(fileId=file_id).execute()
+            
+            revisions = results.get('revisions', [])
+            
+            if not revisions:
+                return None, "No revision history found for this document type (revisions are best for Google Docs/Sheets)."
+                
+            return revisions, None
+            
+        except HttpError as e:
+            try:
+                # Try to extract detailed error message from response body
+                import json
+                error_details = json.loads(e.content.decode())
+                message = error_details.get('error', {}).get('message', str(e))
+                return None, f"Drive API Error: {message}"
+            except:
+                if e.resp.status == 401:
+                    return None, "Expired or invalid OAuth token"
+                elif e.resp.status == 403:
+                    return None, "Insufficient permissions to access revision history"
+                elif e.resp.status == 404:
+                    return None, "File not found"
+                return None, f"API error: {str(e)}"
+        except Exception as e:
+            current_app.logger.error(f"Error fetching revisions: {e}")
+            return None, f"Unexpected error: {str(e)}"
+
+    def aggregate_contributions(self, revisions):
+        """Aggregate contributions with a focus on Gmail but showing all identifiable names"""
+        if not revisions:
+            return []
+            
+        total_revisions = len(revisions)
+        stats = {}
+        
+        for rev in revisions:
+            user = rev.get('lastModifyingUser', {})
+            email = user.get('emailAddress', '').lower() if user else ''
+            name = user.get('displayName') if user else None
+            
+            # Fallback for hidden emails/names
+            if not name and not email:
+                name = "Unverified Contributor"
+                email = "unverified"
+            elif not name:
+                name = email.split('@')[0] if '@' in email else "Unknown"
+
+            # Use email as key if available, otherwise name
+            key = email if (email and email != 'unverified') else name
+            
+            if key not in stats:
+                stats[key] = {
+                    'name': name, 
+                    'email': email, 
+                    'count': 0,
+                    'is_gmail': email.endswith('@gmail.com')
+                }
+            stats[key]['count'] += 1
+        
+        report_contributors = []
+        for key, data in stats.items():
+            count = data['count']
+            percent = (count / total_revisions) * 100
+            
+            # Mark the type for UI clarity
+            display_name = data['name']
+            if not data['is_gmail'] and data['email'] != 'unverified':
+                display_name += " (External)"
+
+            report_contributors.append({
+                'name': display_name,
+                'email': data['email'],
+                'revisionCount': count,
+                'contributionPercent': round(percent, 2),
+                'verified': data['is_gmail']
+            })
+            
+        # Sort: Gmail users first, then by revision count
+        report_contributors.sort(key=lambda x: (x['verified'], x['revisionCount']), reverse=True)
+        return report_contributors
+
+    def generate_contribution_report(self, file_id, user_credentials_json=None):
+        """Generate the final Collaborative Effort Report"""
+        revisions, error = self.fetch_revisions(file_id, user_credentials_json)
+        
+        if error:
+            return None, error
+            
+        total_revisions = len(revisions)
+        contributors = self.aggregate_contributions(revisions)
+        
+        # Discard raw revision data (Data Minimization)
+        del revisions
+        
+        return {
+            'fileId': file_id,
+            'totalRevisions': total_revisions,
+            'contributors': contributors,
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        }, None

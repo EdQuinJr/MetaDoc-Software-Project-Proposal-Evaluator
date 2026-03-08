@@ -39,6 +39,12 @@ class Config:
     GOOGLE_REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI')
     GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get('GOOGLE_SERVICE_ACCOUNT_FILE')
     
+    # Microsoft API Configuration
+    MICROSOFT_CLIENT_ID = os.environ.get('MICROSOFT_CLIENT_ID')
+    MICROSOFT_CLIENT_SECRET = os.environ.get('MICROSOFT_CLIENT_SECRET')
+    MICROSOFT_TENANT_ID = os.environ.get('MICROSOFT_TENANT_ID', 'common')
+    MICROSOFT_REDIRECT_URI = os.environ.get('MICROSOFT_REDIRECT_URI')
+    
     # Gemini AI Configuration (Optional)
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
     
@@ -64,6 +70,11 @@ class Config:
     SESSION_TIMEOUT = int(os.environ.get('SESSION_TIMEOUT', 3600))
     API_RATE_LIMIT = int(os.environ.get('API_RATE_LIMIT', 100))
     ENABLE_AUDIT_LOGGING = os.environ.get('ENABLE_AUDIT_LOGGING', 'True').lower() == 'true'
+    
+    # Session Cookie Configuration for Cross-Origin (localhost ports)
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE = False  # Set to True only if using HTTPS
     
     # Logging Configuration
     LOG_LEVEL = os.environ.get('LOG_LEVEL') or 'INFO'

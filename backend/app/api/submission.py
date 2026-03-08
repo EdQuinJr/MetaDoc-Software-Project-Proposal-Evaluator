@@ -33,6 +33,7 @@ from app.services import SubmissionService, DriveService
 from app.api.auth import get_auth_service
 from app.schemas.dto import SubmissionDTO, SubmissionTokenDTO
 from app.utils.file_utils import FileUtils
+from app.utils.decorators import require_authentication
 
 submission_bp = Blueprint('submission', __name__)
 
@@ -40,7 +41,7 @@ submission_bp = Blueprint('submission', __name__)
 submission_service = SubmissionService()
 drive_service = DriveService()
 
-def validate_submission_token(token):
+def validate_submission_token(token, increment=False):
     """Validate submission token and return token with deadline info"""
     from app.models import SubmissionToken, Deadline
     from datetime import datetime
@@ -54,7 +55,7 @@ def validate_submission_token(token):
         return None, "Invalid submission token"
     
     if not token_record.is_valid():
-        return None, "Submission token has expired or reached usage limit"
+        return None, "This submission link has expired or reached its usage limit."
     
     # Check if token has an associated deadline (safely check if column exists)
     deadline_id = getattr(token_record, 'deadline_id', None)
@@ -66,9 +67,10 @@ def validate_submission_token(token):
         token_record.deadline_title = deadline.title
         token_record.deadline_datetime = deadline.deadline_datetime
     
-    # Increment usage count
-    token_record.usage_count += 1
-    db.session.commit()
+    if increment:
+        # Increment usage count only when an actual action/submission is performed
+        token_record.usage_count += 1
+        db.session.commit()
     
     return token_record, None
 
@@ -95,7 +97,7 @@ def get_token_info():
         deadline_id = getattr(token_record, 'deadline_id', None)
         if deadline_id:
             from app.models import Deadline
-            deadline = Deadline.query.filter_by(id=deadline_id).first()
+            deadline = Deadline.query.get(deadline_id)
             if deadline and deadline.description:
                 response['description'] = deadline.description
         
@@ -105,7 +107,137 @@ def get_token_info():
         current_app.logger.error(f"Token info error: {e}")
         return jsonify({'error': 'Failed to fetch deadline information'}), 500
 
+@submission_bp.route('/student-status', methods=['GET'])
+@require_authentication()
+def get_student_status():
+    """Check if the current user is registered for a deadline"""
+    try:
+        token = request.args.get('token')
+        if not token:
+            return jsonify({'error': 'Token is required'}), 400
+            
+        token_record, error = validate_submission_token(token)
+        if error:
+            return jsonify({'error': error}), 403
+            
+        deadline_id = getattr(token_record, 'deadline_id', None)
+        if not deadline_id:
+            return jsonify({'error': 'Invalid deadline associated with token'}), 400
+            
+        from app.models import Student, UserRole
+        user = request.current_user
+        user_email = user.email
+        
+        # Check if the user is a professor viewing their own (or another) submission link
+        if user.role == UserRole.PROFESSOR or user.role == "professor":
+            return jsonify({
+                'is_registered': False,
+                'is_professor': True,
+                'message': 'You are currently logged in as a Professor.'
+            }), 200
+
+        # Find if student is already linked via email (Case-insensitive)
+        student = Student.query.filter(
+            Student.deadline_id == deadline_id,
+            db.func.lower(Student.email) == user_email.lower()
+        ).first()
+        
+        if student:
+            # Auto-register if not already marked (first time logging in)
+            if not student.is_registered:
+                student.is_registered = True
+                student.registration_date = datetime.utcnow()
+                db.session.commit()
+                current_app.logger.info(f"Auto-registered student {student.student_id} via email match")
+
+            return jsonify({
+                'is_registered': True,
+                'student_id': student.student_id,
+                'last_name': student.last_name,
+                'first_name': student.first_name
+            }), 200
+        else:
+            return jsonify({
+                'is_registered': False,
+                'message': 'Account not authorized. Your Gmail account is not in the class record.'
+            }), 200
+            
+    except Exception as e:
+        current_app.logger.error(f"Student status error: {e}")
+        return jsonify({'error': 'Failed to check registration status'}), 500
+
+@submission_bp.route('/student-register', methods=['POST'])
+@require_authentication()
+def register_student():
+    """Link current user's email to a student ID in the class record"""
+    try:
+        data = request.get_json()
+        token = data.get('token')
+        student_id = data.get('student_id')
+        first_name = data.get('first_name')
+        last_name = data.get('last_name')
+        provided_email = data.get('email')
+        
+        if not token or not student_id:
+            return jsonify({'error': 'Token and Student ID are required'}), 400
+            
+        token_record, error = validate_submission_token(token)
+        if error:
+            return jsonify({'error': error}), 403
+            
+        deadline_id = getattr(token_record, 'deadline_id', None)
+        
+        from app.models import Student
+        # Use provided email if available, otherwise fallback to session email
+        user_email = provided_email.lower().strip() if provided_email else request.current_user.email.lower().strip()
+        
+        # Enforce Gmail domain
+        if not user_email.endswith('@gmail.com'):
+            return jsonify({'error': 'Only personal Gmail accounts (@gmail.com) are allowed for student submissions.'}), 400
+        
+        # 1. Check if email is already used in this class
+        existing_email = Student.query.filter_by(deadline_id=deadline_id, email=user_email).first()
+        if existing_email:
+            return jsonify({
+                'message': 'Account already registered',
+                'student_id': existing_email.student_id,
+                'name': f"{existing_email.first_name} {existing_email.last_name}"
+            }), 200
+            
+        # 2. Check if student ID exists in the class record for this deadline
+        student = Student.query.filter_by(deadline_id=deadline_id, student_id=student_id).first()
+        
+        if not student:
+            return jsonify({'error': 'Your Student ID was not found in the class record for this folder. Please ensure you are enrolled or contact your professor.'}), 404
+            
+        # 3. Check if student ID is already linked to another email
+        if student.email and student.email != user_email:
+            return jsonify({'error': 'This Student ID is already registered to a different email account.'}), 400
+            
+        # 4. Link the Google account and update registration status
+        student.email = user_email
+        student.is_registered = True
+        student.registration_date = datetime.utcnow()
+        
+        # Optional: verify names match or update them if they were empty in the record
+        if first_name and not student.first_name: student.first_name = first_name
+        if last_name and not student.last_name: student.last_name = last_name
+
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Successfully registered and linked account!',
+            'student_id': student.student_id,
+            'name': f"{student.first_name} {student.last_name}"
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Student registration error: {e}")
+        return jsonify({'error': 'Failed to complete registration'}), 500
+
 @submission_bp.route('/upload', methods=['POST'])
+@require_authentication()
 def upload_file():
     """
     Handle file upload submissions
@@ -119,13 +251,29 @@ def upload_file():
         if not token:
             return jsonify({'error': 'Submission token is required. Please use the link provided by your professor.'}), 403
         
-        token_record, error = validate_submission_token(token)
+        token_record, error = validate_submission_token(token, increment=True)
         if error:
             return jsonify({'error': error}), 403
         
         professor_id = token_record.professor_id
         # Use deadline from token (if column exists)
         deadline_id = getattr(token_record, 'deadline_id', None)
+        
+        # Verify student registration if user is a student
+        from app.models import UserRole, Student
+        user = request.current_user
+        
+        student_id = request.form.get('student_id', '').strip()
+        student_name = request.form.get('student_name', '').strip()
+
+        if user.role == UserRole.STUDENT:
+            student = Student.query.filter_by(deadline_id=deadline_id, email=user.email).first()
+            if not student:
+                return jsonify({'error': 'Account not authorized. Your Gmail account is not in the class record for this folder.'}), 403
+            
+            # Override with official class record info
+            student_id = student.student_id
+            student_name = f"{student.first_name} {student.last_name}"
         
         # Validate request
         if 'file' not in request.files:
@@ -134,10 +282,6 @@ def upload_file():
         file = request.files['file']
         if file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
-        
-        # Extract additional form data
-        student_id = request.form.get('student_id', '').strip()
-        student_name = request.form.get('student_name', '').strip()
         
         # Validate file
         validation_errors = submission_service.validate_file(file)
@@ -378,6 +522,7 @@ def upload_file():
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
 @submission_bp.route('/drive-link', methods=['POST'])
+@require_authentication()
 def submit_drive_link():
     """
     Handle Google Drive link submissions
@@ -396,7 +541,7 @@ def submit_drive_link():
         if not token:
             return jsonify({'error': 'Submission token is required. Please use the link provided by your professor.'}), 403
         
-        token_record, error = validate_submission_token(token)
+        token_record, error = validate_submission_token(token, increment=True)
         if error:
             return jsonify({'error': error}), 403
         
@@ -404,9 +549,22 @@ def submit_drive_link():
         # Use deadline from token (if column exists)
         deadline_id = getattr(token_record, 'deadline_id', None)
         
+        # Verify student registration if user is a student
+        from app.models import UserRole, Student
+        user = request.current_user
+        
         drive_link = data['drive_link'].strip()
         student_id = data.get('student_id', '').strip()
         student_name = data.get('student_name', '').strip()
+
+        if user.role == UserRole.STUDENT:
+            student = Student.query.filter_by(deadline_id=deadline_id, email=user.email).first()
+            if not student:
+                return jsonify({'error': 'Account not authorized. Your Gmail account is not in the class record for this folder.'}), 403
+            
+            # Override with official class record info
+            student_id = student.student_id
+            student_name = f"{student.first_name} {student.last_name}"
         
         # Validate drive link format
         file_id, validation_error = submission_service.validate_drive_link(drive_link)
@@ -448,7 +606,7 @@ def submit_drive_link():
             from app.api.metadata import metadata_service
             
             # Try to extract metadata to validate document
-            test_metadata, test_error = metadata_service.extract_docx_metadata(file_path)
+            test_metadata, test_error = metadata_service.extract_docx_metadata(file_path, external_metadata=metadata)
             if test_error:
                 os.remove(file_path)
                 return jsonify({'error': f'Invalid document: {test_error}'}), 415
@@ -561,8 +719,8 @@ def submit_drive_link():
             submission.processing_started_at = datetime.utcnow()
             db.session.commit()
             
-            # Extract metadata
-            doc_metadata, metadata_error = metadata_service.extract_docx_metadata(storage_path)
+            # Extract metadata (using external Google Drive metadata for more accuracy)
+            doc_metadata, metadata_error = metadata_service.extract_docx_metadata(storage_path, external_metadata=metadata)
             if not metadata_error:
                 # Merge Google Drive metadata with document metadata
                 # Google Drive metadata has more accurate editor/owner information

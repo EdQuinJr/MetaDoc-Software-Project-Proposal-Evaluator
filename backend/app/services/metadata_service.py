@@ -31,8 +31,11 @@ class MetadataService:
     def max_word_count(self):
         return current_app.config.get('MAX_DOCUMENT_WORDS', 15000)
     
-    def extract_docx_metadata(self, file_path):
-        """Extract metadata from DOCX file using python-docx and direct XML parsing"""
+    def extract_docx_metadata(self, file_path, external_metadata=None):
+        """
+        Extract metadata from DOCX file using python-docx and direct XML parsing.
+        Can be augmented with external metadata (e.g. from Google Drive API).
+        """
         metadata = {
             'author': 'Unavailable',
             'creation_date': None,
@@ -120,6 +123,13 @@ class MetadataService:
                                     metadata['last_editor'] = text
                                 elif tag == 'creator' and metadata['author'] == 'Unavailable':
                                     metadata['author'] = text
+                                elif tag == 'contributor':
+                                    if text not in [c['name'] for c in metadata['contributors']]:
+                                        metadata['contributors'].append({
+                                            'name': text,
+                                            'role': 'Contributor',
+                                            'date': None
+                                        })
                         except Exception as e:
                             current_app.logger.warning(f"Error parsing core.xml: {e}")
             except Exception as e:
@@ -141,22 +151,89 @@ class MetadataService:
             metadata['last_editor'] = 'Unavailable'
         if metadata['author'] and 'python-docx' in str(metadata['author']):
             metadata['author'] = 'Unavailable'
+
+        # Integrate external metadata (e.g. from Google Drive)
+        if external_metadata:
+            seen_emails = set()
+            
+            # 1. Update basic fields if internal ones are missing
+            if metadata['author'] == 'Unavailable' and 'owners' in external_metadata:
+                owners = external_metadata['owners']
+                if owners and len(owners) > 0:
+                    metadata['author'] = owners[0].get('displayName', 'Unavailable')
+            
+            if metadata['last_editor'] == 'Unavailable' and 'lastModifyingUser' in external_metadata:
+                 lmu = external_metadata['lastModifyingUser']
+                 if lmu:
+                     metadata['last_editor'] = lmu.get('displayName', 'Unavailable')
+            
+            if not metadata['creation_date'] and 'createdTime' in external_metadata:
+                metadata['creation_date'] = external_metadata['createdTime']
+            
+            if not metadata['last_modified_date'] and 'modifiedTime' in external_metadata:
+                metadata['last_modified_date'] = external_metadata['modifiedTime']
+
+            # 2. Add all Drive owners as contributors
+            if 'owners' in external_metadata:
+                for owner in external_metadata['owners']:
+                    name = owner.get('displayName')
+                    email = owner.get('emailAddress')
+                    if name and name not in [c['name'] for c in metadata['contributors']]:
+                        metadata['contributors'].append({
+                            'name': name,
+                            'role': 'Owner',
+                            'email': email,
+                            'date': external_metadata.get('createdTime')
+                        })
+                        if email: seen_emails.add(email)
+            
+            # 3. Add last modifying user as contributor
+            if 'lastModifyingUser' in external_metadata:
+                lmu = external_metadata['lastModifyingUser']
+                name = lmu.get('displayName')
+                email = lmu.get('emailAddress')
+                if name and email not in seen_emails:
+                    metadata['contributors'].append({
+                        'name': name,
+                        'role': 'Last Editor',
+                        'email': email,
+                        'date': external_metadata.get('modifiedTime')
+                    })
+                    if email: seen_emails.add(email)
+
+            # 4. Add other collaborators from permissions
+            if 'permissions' in external_metadata:
+                for perm in external_metadata['permissions']:
+                    email = perm.get('emailAddress')
+                    name = perm.get('displayName', email)
+                    if name and email and email not in seen_emails:
+                        metadata['contributors'].append({
+                            'name': name,
+                            'role': perm.get('role', 'contributor').capitalize(),
+                            'email': email,
+                            'date': None
+                        })
+                        seen_emails.add(email)
         
-        # Populate contributors
+        # Populate contributors from internal fallback if still empty or missing author/editor
         if metadata['author'] != 'Unavailable':
-            metadata['contributors'].append({
-                'name': metadata['author'], 
-                'role': 'Author',
-                'date': metadata['creation_date']
-            })
+             if metadata['author'] not in [c['name'] for c in metadata['contributors']]:
+                metadata['contributors'].append({
+                    'name': metadata['author'], 
+                    'role': 'Author',
+                    'date': metadata['creation_date']
+                })
         
         if metadata['last_editor'] != 'Unavailable':
-            if not metadata['contributors'] or metadata['contributors'][0]['name'] != metadata['last_editor']:
+            if metadata['last_editor'] not in [c['name'] for c in metadata['contributors']]:
                 metadata['contributors'].append({
                     'name': metadata['last_editor'], 
                     'role': 'Editor',
                     'date': metadata['last_modified_date']
                 })
+        
+        # Limit to 10 contributors for display sanity
+        metadata['contributors'] = metadata['contributors'][:10]
         
         # [Fallback] Filesystem timestamps if document metadata is missing
         if not metadata['creation_date']:

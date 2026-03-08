@@ -11,11 +11,13 @@ import SubmissionDetailView from './pages/SubmissionDetailView';
 import Deadlines from './pages/Deadlines';
 import Rubrics from './pages/Rubrics';
 import Reports from './pages/Reports';
+import ClassRecord from './pages/ClassRecord';
+import StudentLogin from './pages/StudentLogin';
 import './App.css';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -25,12 +27,21 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Prevent students from accessing professor pages
+  if (user?.role === 'student' || user?.role === 'STUDENT') {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
 };
 
 // Public Route Component (redirect to dashboard if already authenticated)
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -40,7 +51,16 @@ const PublicRoute = ({ children }) => {
     );
   }
 
-  return !isAuthenticated ? children : <Navigate to="/dashboard" replace />;
+  // Redirect authenticated users to appropriate landing pages
+  if (isAuthenticated) {
+    if (user?.role === 'professor' || user?.role === 'admin') {
+      return <Navigate to="/dashboard" replace />;
+    } else if (user?.role === 'student' || user?.role === 'STUDENT') {
+      return <Navigate to="/student/login" replace />;
+    }
+  }
+
+  return children;
 };
 
 function App() {
@@ -66,6 +86,7 @@ function App() {
             }
           />
           <Route path="/submit" element={<TokenBasedSubmission />} />
+          <Route path="/student/login" element={<StudentLogin />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="/auth/callback" element={<OAuthCallback />} />
 
@@ -126,6 +147,16 @@ function App() {
               <ProtectedRoute>
                 <DashboardLayout>
                   <Rubrics />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/class-record"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <ClassRecord />
                 </DashboardLayout>
               </ProtectedRoute>
             }

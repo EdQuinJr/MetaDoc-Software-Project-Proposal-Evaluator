@@ -320,13 +320,6 @@ const Dashboard = () => {
                 <Copy size={16} />
                 {copySuccess ? 'Copied!' : 'Copy'}
               </button>
-              <button
-                className="btn-compact btn-open"
-                onClick={() => window.open(`/submit?token=${submissionToken}`, '_blank')}
-              >
-                <ExternalLink size={16} />
-                Open
-              </button>
             </>
           )}
         </div>

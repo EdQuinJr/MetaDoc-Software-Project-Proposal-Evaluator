@@ -17,7 +17,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
 from app.core.extensions import db
-from app.models import User, UserSession, UserRole
+from app.models import User, UserSession, UserRole, Student
 
 
 class AuthService:
@@ -41,6 +41,7 @@ class AuthService:
     @property
     def allowed_domains(self):
         return current_app.config.get('ALLOWED_EMAIL_DOMAINS', [])
+
     
     def get_google_auth_url(self, user_type='professor'):
         """Generate Google OAuth authorization URL"""
@@ -69,6 +70,8 @@ class AuthService:
             session['oauth_state'] = state
             session['user_type'] = user_type
             
+            current_app.logger.info(f"OAuth URL generated. State saved: {state}")
+            
             authorization_url, _ = flow.authorization_url(
                 access_type='offline',
                 include_granted_scopes='true',
@@ -85,8 +88,17 @@ class AuthService:
     def handle_oauth_callback(self, authorization_code, state):
         """Handle OAuth callback and create user session"""
         try:
-            if state != session.get('oauth_state'):
+            current_app.logger.info(f"Callback received with state: {state}")
+            saved_state = session.get('oauth_state')
+            current_app.logger.info(f"Saved state in session: {saved_state}")
+            
+            if state != saved_state:
+                current_app.logger.error(f"State mismatch! received: {state}, saved: {saved_state}")
+                # For development, if session is lost, we might need to skip this OR fix the session
                 return None, "Invalid OAuth state"
+            
+            # Clear state after verification
+            session.pop('oauth_state', None)
             
             flow = Flow.from_client_config(
                 client_config={
@@ -126,20 +138,39 @@ class AuthService:
             picture = user_info.get('picture')
             google_id = user_info.get('sub')
             
-            # Domain validation logic
-            if self.allowed_domains and self.allowed_domains != ['']:
+            user_type = session.get('user_type', 'professor')
+            
+            # [NEW] Check for existing user role conflicts
+            existing_user = User.query.filter_by(email=email).first()
+            if user_type == 'student' and existing_user and existing_user.role == UserRole.PROFESSOR:
+                return None, "Professor accounts cannot be used for student submissions. Please use your personal Gmail account that you listed in the excel class record."
+
+            # Domain and Class Record validation logic
+            if user_type == 'student':
+                if not email.endswith('@gmail.com'):
+                    return None, "Only personal Gmail accounts (@gmail.com) are allowed for student submissions. Please sign in with the gmail account that you listed in the excel class record."
+                
+                # Check if this student email exists in ANY class record (Student table)
+                student_record = Student.query.filter_by(email=email).first()
+                if not student_record:
+                    return None, f"This Gmail address ({email}) is not associated with any student in our class records. Please use the Gmail account you listed in the excel class record."
+                
+                # If found, mark as registered if not already
+                if not student_record.is_registered:
+                    student_record.is_registered = True
+                    student_record.registration_date = datetime.utcnow()
+                    db.session.add(student_record)
+                    # We commit below with User create/update
+            elif self.allowed_domains and self.allowed_domains != ['']:
                 domain = email.split('@')[1] if '@' in email else ''
-                # Always allow gmail.com and the specific allowed domains
                 allowed = [d.strip().lower() for d in self.allowed_domains if d.strip()]
-                allowed.append('gmail.com')
                 
                 if domain not in allowed:
                     return None, f"Email domain '{domain}' not allowed. Allowed domains: {', '.join(allowed)}"
             
-            user_type = session.get('user_type', 'professor')
             role = UserRole.PROFESSOR if user_type == 'professor' else UserRole.STUDENT
             
-            user = User.query.filter_by(email=email).first()
+            user = existing_user
             if not user:
                 user = User(
                     email=email,
@@ -155,6 +186,12 @@ class AuthService:
                 user.google_id = google_id
                 user.profile_picture = picture
                 user.last_login = datetime.utcnow()
+                # Ensure role is correct for the session if not already set (mostly for new student links)
+                if user.role != role and user_type == 'student':
+                     # We already handled Professor-as-Student above, 
+                     # this handles Student-as-Professor if we allowed it, 
+                     # but let's keep it safe.
+                     pass
             
             db.session.commit()
             
@@ -162,7 +199,11 @@ class AuthService:
             user_session = UserSession(
                 user_id=user.id,
                 session_token=session_token,
-                expires_at=datetime.utcnow() + timedelta(days=7)
+                expires_at=datetime.utcnow() + timedelta(days=7),
+                # Persist credentials to database for later use (e.g. reporting)
+                google_access_token=credentials.token,
+                google_refresh_token=credentials.refresh_token,
+                token_expires_at=credentials.expiry
             )
             db.session.add(user_session)
             db.session.commit()
@@ -197,7 +238,7 @@ class AuthService:
         
         return {'user': user, 'session': user_session}, None
     
-    def logout(self, session_token):
+    def logout_user(self, session_token):
         """Logout user by invalidating session"""
         try:
             user_session = UserSession.query.filter_by(session_token=session_token).first()

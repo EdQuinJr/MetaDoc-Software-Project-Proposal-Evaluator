@@ -38,14 +38,13 @@ def get_auth_service():
 @auth_bp.route('/login', methods=['GET'])
 def initiate_login():
     """
-    Initiate Google OAuth login
-    
-    SRS Reference: M5.UC01 - Professor Login via Gmail OAuth
+    Initiate OAuth login (Google/Gmail)
     """
     try:
         # Get user type from query parameter (student or professor)
         user_type = request.args.get('user_type', 'professor')
         
+        # We only support Google/Gmail now
         auth_url, error = get_auth_service().get_google_auth_url(user_type)
         
         if error:
@@ -53,12 +52,14 @@ def initiate_login():
         
         return jsonify({
             'auth_url': auth_url,
-            'message': 'Redirect to auth_url to complete login'
+            'message': 'Redirect to auth_url to complete Google login'
         })
         
     except Exception as e:
         current_app.logger.error(f"Login initiation failed: {e}")
         return jsonify({'error': 'Authentication service unavailable'}), 500
+
+
 
 @auth_bp.route('/callback', methods=['GET'])
 def oauth_callback():

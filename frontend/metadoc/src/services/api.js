@@ -6,6 +6,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -41,11 +42,13 @@ api.interceptors.response.use(
 
 // Authentication API
 export const authAPI = {
-  initiateLogin: (userType = 'professor') => api.get('/auth/login', { params: { user_type: userType } }),
+  initiateLogin: (userType = 'professor', provider = 'google') =>
+    api.get('/auth/login', { params: { user_type: userType, provider: provider } }),
   validateSession: (sessionToken) => api.post('/auth/validate', { session_token: sessionToken }),
   logout: (sessionToken) => api.post('/auth/logout', { session_token: sessionToken }),
   getProfile: () => api.get('/auth/profile'),
   generateSubmissionToken: (deadlineId = null) => api.post('/auth/generate-submission-token', { deadline_id: deadlineId }),
+  microsoftTokenLogin: (idToken, userType) => api.post('/auth/microsoft-token-login', { id_token: idToken, user_type: userType }),
 };
 
 // Submission API
@@ -60,6 +63,8 @@ export const submissionAPI = {
   submitDriveLink: (data) => api.post('/submission/drive-link', data),
   getStatus: (jobId) => api.get(`/submission/status/${jobId}`),
   validateDriveLink: (driveLink) => api.post('/submission/validate-link', { drive_link: driveLink }),
+  getStudentStatus: (token) => api.get(`/submission/student-status`, { params: { token } }),
+  registerStudent: (data) => api.post('/submission/student-register', data),
 };
 
 // Dashboard API
@@ -74,6 +79,10 @@ export const dashboardAPI = {
   deleteDeadline: (deadlineId) => api.delete(`/dashboard/deadlines/${deadlineId}`),
   getSubmissionFile: (submissionId) => api.get(`/dashboard/submissions/${submissionId}/download`, { responseType: 'blob' }),
   downloadDeadlineFiles: (deadlineId) => api.get(`/dashboard/deadlines/${deadlineId}/download-all`, { responseType: 'blob' }),
+  getDeadlineStudents: (deadlineId) => api.get(`/dashboard/deadlines/${deadlineId}/students`),
+  importDeadlineStudents: (deadlineId, students) => api.post(`/dashboard/deadlines/${deadlineId}/import-students`, { students }),
+  deleteDeadlineStudent: (deadlineId, studentId) => api.delete(`/dashboard/deadlines/${deadlineId}/students/${studentId}`),
+  getContributionReport: (submissionId) => api.get(`/dashboard/submissions/${submissionId}/contribution-report`),
 };
 
 // Metadata API

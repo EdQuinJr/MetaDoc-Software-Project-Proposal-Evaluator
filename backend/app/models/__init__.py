@@ -27,6 +27,7 @@ from app.models.rubric import Rubric
 from app.models.analysis import AnalysisResult, DocumentSnapshot
 from app.models.audit import AuditLog
 from app.models.report import ReportExport
+from app.models.student import Student
 
 # Export all models for easy importing
 __all__ = [
@@ -45,5 +46,6 @@ __all__ = [
     'AnalysisResult',
     'DocumentSnapshot',
     'AuditLog',
-    'ReportExport'
+    'ReportExport',
+    'Student'
 ]

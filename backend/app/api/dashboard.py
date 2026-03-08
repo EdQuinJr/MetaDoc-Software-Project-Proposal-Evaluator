@@ -18,10 +18,10 @@ import os
 from app.core.extensions import db
 from app.models import (
     Submission, AnalysisResult, Deadline, User, DocumentSnapshot, AuditLog,
-    SubmissionStatus, TimelinesssClassification
+    SubmissionStatus, TimelinesssClassification, UserRole
 )
 from app.services.audit_service import AuditService
-from app.services import DashboardService
+from app.services import DashboardService, DriveService, SubmissionService
 from app.api.auth import get_auth_service
 from app.utils.decorators import require_authentication
 from app.schemas.dto import (
@@ -569,3 +569,135 @@ def download_deadline_files(deadline_id):
         return jsonify({'error': 'Error preparing batch download'}), 500
 
 
+@dashboard_bp.route('/deadlines/<deadline_id>/students', methods=['GET'])
+@require_authentication()
+def get_deadline_students(deadline_id):
+    """Get list of students for a deadline folder"""
+    try:
+        user_id = request.current_user.id
+        result, error = dashboard_service.get_students_for_deadline(deadline_id, user_id)
+        
+        if error:
+            return jsonify({'error': error}), 404 if 'not found' in error else 500
+        
+        return jsonify({'students': result})
+        
+    except Exception as e:
+        current_app.logger.error(f"Get students error: {e}")
+        return jsonify({'error': 'Error loading students'}), 500
+
+@dashboard_bp.route('/deadlines/<deadline_id>/import-students', methods=['POST'])
+@require_authentication()
+def import_deadline_students(deadline_id):
+    """Import students into a deadline folder"""
+    try:
+        user_id = request.current_user.id
+        data = request.get_json()
+        
+        if not data or 'students' not in data:
+            return jsonify({'error': 'No student data provided'}), 400
+        
+        result, error = dashboard_service.import_students(deadline_id, user_id, data['students'])
+        
+        if error:
+            return jsonify({'error': error}), 400
+        
+        return jsonify({
+            'message': 'Students imported successfully',
+            'stats': result
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Import students error: {e}")
+        return jsonify({'error': 'Error importing students'}), 500
+@dashboard_bp.route('/deadlines/<deadline_id>/students/<student_id>', methods=['DELETE'])
+@require_authentication()
+def delete_deadline_student(deadline_id, student_id):
+    """Delete a student record from a deadline folder"""
+    try:
+        user_id = request.current_user.id
+        success, error = dashboard_service.delete_student(student_id, deadline_id, user_id)
+        
+        if error:
+            return jsonify({'error': error}), 404 if 'not found' in error else 400
+        
+        return jsonify({
+            'message': 'Student record deleted successfully'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Delete student error: {e}")
+        return jsonify({'error': 'Error deleting student record'}), 500
+@dashboard_bp.route('/submissions/<submission_id>/contribution-report', methods=['GET'])
+@require_authentication()
+def get_contribution_report(submission_id):
+    """
+    Generate Collaborative Contribution Tracking report for a submission
+    """
+    try:
+        user = request.current_user
+        
+        # Super-robust role check for various serialization formats
+        role_id = str(user.role).lower()
+        role_value = str(user.role.value).lower() if hasattr(user.role, 'value') else ""
+        role_name = str(user.role.name).lower() if hasattr(user.role, 'name') else ""
+        
+        is_authorized = any(kw in role_id or kw in role_value or kw in role_name 
+                           for kw in ['professor', 'admin'])
+        
+        if not is_authorized:
+            return jsonify({'error': 'Unauthorized. Only professors can view this report.'}), 403
+            
+        submission = Submission.query.filter_by(id=submission_id, professor_id=user.id).first()
+        if not submission:
+            return jsonify({'error': 'Submission not found or unauthorized'}), 404
+            
+        if submission.submission_type != 'drive_link' or not submission.google_drive_link:
+            return jsonify({'error': 'Contribution tracking is only available for Google Drive submissions.'}), 400
+            
+        # Extract File ID
+        submission_service = SubmissionService()
+        file_id, validation_error = submission_service.validate_drive_link(submission.google_drive_link)
+        
+        if validation_error:
+            return jsonify({'error': f"Invalid Drive link: {validation_error}"}), 400
+            
+        # [NEW] Use Professor's credentials if available to ensure permission to see revisions
+        user_creds_json = None
+        session_obj = getattr(request, 'current_session', None)
+        if session_obj and session_obj.google_access_token:
+            try:
+                import json
+                creds_dict = {
+                    "token": session_obj.google_access_token,
+                    "refresh_token": session_obj.google_refresh_token,
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "client_id": current_app.config.get('GOOGLE_CLIENT_ID'),
+                    "client_secret": current_app.config.get('GOOGLE_CLIENT_SECRET'),
+                    "scopes": ['https://www.googleapis.com/auth/drive.readonly']
+                }
+                user_creds_json = json.dumps(creds_dict)
+            except Exception as cred_err:
+                current_app.logger.warning(f"Failed to prepare user credentials for report: {cred_err}")
+
+        # Generate Report
+        drive_service = DriveService()
+        report, error = drive_service.generate_contribution_report(file_id, user_creds_json)
+        
+        if error:
+            current_app.logger.error(f"Contribution report failed for {submission_id}: {error}")
+            
+            # Special guidance for missing tokens (likely an old session)
+            if "Insufficient permissions" in error or "Google Drive service unavailable" in error:
+                 if not user_creds_json:
+                      return jsonify({
+                          'error': 'Permission setup required. Please Log Out and Log Back In with your Gmail account to enable collaborative tracking for your documents.'
+                      }), 400
+                      
+            return jsonify({'error': error}), 400
+            
+        return jsonify(report)
+        
+    except Exception as e:
+        current_app.logger.error(f"Contribution report error: {e}")
+        return jsonify({'error': 'Failed to generate contribution report'}), 500

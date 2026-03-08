@@ -12,7 +12,8 @@ import {
   AlertCircle,
   CheckCircle,
   TrendingUp,
-  ExternalLink
+  ExternalLink,
+  Users
 } from 'lucide-react';
 import Card from '../components/common/Card/Card';
 import Badge from '../components/common/Badge/Badge';
@@ -24,6 +25,8 @@ const SubmissionDetailView = () => {
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [contributionReport, setContributionReport] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
 
   useEffect(() => {
     fetchSubmissionDetail();
@@ -38,11 +41,33 @@ const SubmissionDetailView = () => {
         new Promise(resolve => setTimeout(resolve, 1200))
       ]);
       setSubmission(response.data);
+      
+      // Fetch contribution report if it's a Drive link
+      if (response.data.submission_type === 'drive_link') {
+        fetchContributionReport();
+      }
     } catch (err) {
       setError('Failed to load submission details');
       console.error('Submission detail error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const [reportError, setReportError] = useState(null);
+
+  const fetchContributionReport = async () => {
+    try {
+      setReportError(null);
+      setReportLoading(true);
+      const response = await dashboardAPI.getContributionReport(id);
+      setContributionReport(response.data);
+    } catch (err) {
+      console.error('Failed to load contribution report:', err);
+      const msg = err.response?.data?.error || 'Unable to generate revision report.';
+      setReportError(msg);
+    } finally {
+      setReportLoading(false);
     }
   };
 
@@ -312,6 +337,88 @@ const SubmissionDetailView = () => {
           </Card>
         )}
 
+        {/* Collaborative Effort Report (Google Drive Only) */}
+        {submission.submission_type === 'drive_link' && (
+          <Card 
+            title={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                <Users size={20} />
+                Collaborative Effort Report
+              </div>
+            } 
+            className="h-full"
+          >
+            {reportLoading ? (
+              <div className="flex flex-col items-center justify-center p-8 text-gray-500">
+                <div className="spinner-small mb-4"></div>
+                <p>Generating contribution report...</p>
+              </div>
+            ) : contributionReport ? (
+              <div className="space-y-6">
+                <div className="text-sm text-gray-500 mb-4">
+                  Total Revisions Analyzed: <strong>{contributionReport.totalRevisions}</strong>
+                </div>
+                
+                <div className="space-y-4">
+                  {contributionReport.contributors.map((contributor, idx) => (
+                    <div key={idx} className="contribution-item">
+                      <div className="flex justify-between items-center mb-1">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-gray-800">
+                            {contributor.name}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {contributor.email}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm font-bold text-maroon">
+                            {contributor.contributionPercent}%
+                          </span>
+                          <div className="text-xs text-gray-400">
+                            {contributor.revisionCount} revisions
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Custom Progress Bar */}
+                      <div style={{ 
+                        height: '8px', 
+                        width: '100%', 
+                        background: '#f3f4f6', 
+                        borderRadius: '4px',
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{ 
+                          height: '100%', 
+                          width: `${contributor.contributionPercent}%`, 
+                          background: contributor.email === 'unverified' ? '#9ca3af' : 'var(--color-maroon)',
+                          transition: 'width 1s ease-out'
+                        }}></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="mt-6 p-3 bg-gray-50 rounded-lg border border-gray-100 italic text-xs text-gray-500">
+                  <AlertCircle size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                  Revision stats are based on Google Drive history. Unverified contributors include anonymous or non-Gmail users.
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-8 text-gray-400 text-center">
+                <AlertCircle size={32} className="mb-2" />
+                <p>{reportError || 'Unable to generate revision report for this document.'}</p>
+                {reportError?.includes('permissions') && (
+                  <p className="text-xs mt-4 bg-gray-50 p-2 rounded border border-gray-100 italic">
+                    Tip: Ensure the document is shared as "Anyone with the link can edit/view" for revision history access.
+                  </p>
+                )}
+              </div>
+            )}
+          </Card>
+        )}
+
         {/* Evaluation Rubric Reference */}
         {submission.deadline?.rubric && (
           <Card title="Evaluation Rubric" className="h-full">
@@ -350,8 +457,8 @@ const SubmissionDetailView = () => {
                         <td className="px-4 py-3 align-top text-center">
                           {result?.rating ? (
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${result.rating === 'High' ? 'bg-green-100 text-green-800' :
-                                result.rating === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-red-100 text-red-800'
+                              result.rating === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-red-100 text-red-800'
                               }`}>
                               {result.rating}
                             </span>
