@@ -9,17 +9,37 @@ import '../styles/Login.css'; // Reuse login styles
 
 
 const StudentLogin = () => {
-    const { login, isAuthenticated, authLoading } = useAuth();
+    const { login, isAuthenticated, authLoading, logout, user } = useAuth();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const token = searchParams.get('token');
     const [loading, setLoading] = useState(false);
+    const [studentLinks, setStudentLinks] = useState([]);
+    const [fetchingLinks, setFetchingLinks] = useState(false);
 
     useEffect(() => {
-        if (isAuthenticated && !authLoading && token) {
-            navigate(`/submit?token=${token}`);
+        if (isAuthenticated && !authLoading) {
+            if (token) {
+                navigate(`/submit?token=${token}`);
+            } else {
+                // Fetch available links for this student
+                fetchAvailableLinks();
+            }
         }
     }, [isAuthenticated, authLoading, token, navigate]);
+
+    const fetchAvailableLinks = async () => {
+        setFetchingLinks(true);
+        try {
+            const { submissionAPI } = await import('../services/api');
+            const response = await submissionAPI.getStudentLinks();
+            setStudentLinks(response.data.links || []);
+        } catch (err) {
+            console.error('Failed to fetch student links:', err);
+        } finally {
+            setFetchingLinks(false);
+        }
+    };
 
     const handleGoogleLogin = async () => {
         setLoading(true);
@@ -46,12 +66,12 @@ const StudentLogin = () => {
                         <CheckCircle size={40} />
                     </div>
 
-                    <h2 className="premium-card-title">Welcome, {useAuth().user?.name}</h2>
-                    
+                    <h2 className="premium-card-title">Welcome, {user?.name}</h2>
+
                     <div className="status-badge registered">Account Registered</div>
 
                     <p className="premium-card-desc">
-                        You are successfully signed in as <strong>{useAuth().user?.email}</strong>.
+                        You are successfully signed in as <strong>{user?.email}</strong>.
                     </p>
 
                     <div style={{ marginTop: 'var(--spacing-xl)' }}>
@@ -63,18 +83,34 @@ const StudentLogin = () => {
                             >
                                 Proceed to Submission
                             </Button>
+                        ) : studentLinks.length > 0 ? (
+                            <div className="authorized-links-container">
+                                <div
+                                    className="submission-link-card"
+                                    onClick={() => navigate(`/submit?token=${studentLinks[0].token}`)}
+                                >
+                                    <div className="link-icon">
+                                        <FileText size={24} />
+                                    </div>
+                                    <div className="link-info">
+                                        <h4>{studentLinks[0].deadline_title}</h4>
+                                    </div>
+                                    <LogIn size={20} className="link-arrow" />
+                                </div>
+                            </div>
                         ) : (
                             <div className="alert alert-info" style={{ textAlign: 'left' }}>
                                 <p>To submit your proposal, please click the <strong>Submission Link</strong> shared by your professor.</p>
+                                {fetchingLinks && <div className="fetching-loader">Checking for shared links...</div>}
                             </div>
                         )}
-                        
+
                         <Button
-                            onClick={() => useAuth().logout()}
+                            onClick={() => logout()}
                             variant="outline"
                             size="medium"
                             className="w-full"
-                            style={{ marginTop: '1rem' }}
+                            style={{ marginTop: '1.5rem' }}
                         >
                             Sign Out
                         </Button>

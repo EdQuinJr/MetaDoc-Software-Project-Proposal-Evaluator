@@ -245,6 +245,17 @@ def generate_submission_token():
             if deadline.deadline_datetime < datetime.now():
                 return jsonify({'error': 'Cannot generate submission link: The selected deadline is past or outdated.'}), 400
         
+        # Cleanup expired tokens before generating a new one to save space
+        try:
+            from app.models import SubmissionToken
+            expired_count = SubmissionToken.query.filter(SubmissionToken.expires_at < datetime.utcnow()).delete()
+            if expired_count > 0:
+                db.session.commit()
+                current_app.logger.info(f"Cleaned up {expired_count} expired submission tokens.")
+        except Exception as cleanup_err:
+            current_app.logger.warning(f"Failed to cleanup expired tokens: {cleanup_err}")
+            db.session.rollback()
+
         # Generate submission token (valid for 30 days)
         submission_token = secrets.token_urlsafe(32)
         expires_at = datetime.utcnow() + timedelta(days=30)

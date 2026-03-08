@@ -48,7 +48,6 @@ export const authAPI = {
   logout: (sessionToken) => api.post('/auth/logout', { session_token: sessionToken }),
   getProfile: () => api.get('/auth/profile'),
   generateSubmissionToken: (deadlineId = null) => api.post('/auth/generate-submission-token', { deadline_id: deadlineId }),
-  microsoftTokenLogin: (idToken, userType) => api.post('/auth/microsoft-token-login', { id_token: idToken, user_type: userType }),
 };
 
 // Submission API
@@ -65,6 +64,7 @@ export const submissionAPI = {
   validateDriveLink: (driveLink) => api.post('/submission/validate-link', { drive_link: driveLink }),
   getStudentStatus: (token) => api.get(`/submission/student-status`, { params: { token } }),
   registerStudent: (data) => api.post('/submission/student-register', data),
+  getStudentLinks: () => api.get('/submission/student-links'),
 };
 
 // Dashboard API
@@ -82,6 +82,8 @@ export const dashboardAPI = {
   getDeadlineStudents: (deadlineId) => api.get(`/dashboard/deadlines/${deadlineId}/students`),
   importDeadlineStudents: (deadlineId, students) => api.post(`/dashboard/deadlines/${deadlineId}/import-students`, { students }),
   deleteDeadlineStudent: (deadlineId, studentId) => api.delete(`/dashboard/deadlines/${deadlineId}/students/${studentId}`),
+  addDeadlineStudent: (deadlineId, data) => api.post(`/dashboard/deadlines/${deadlineId}/students/add`, data),
+  updateDeadlineStudent: (deadlineId, studentId, data) => api.put(`/dashboard/deadlines/${deadlineId}/students/${studentId}`, data),
   getContributionReport: (submissionId) => api.get(`/dashboard/submissions/${submissionId}/contribution-report`),
 };
 

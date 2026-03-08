@@ -19,6 +19,23 @@ import Card from '../components/common/Card/Card';
 import Badge from '../components/common/Badge/Badge';
 import '../styles/SubmissionDetail.css';
 
+const formatStudentId = (input) => {
+  if (!input) return 'N/A';
+  const digits = input.replace(/\D/g, '');
+  const limited = digits.slice(0, 9);
+  let result = '';
+  if (limited.length > 0) {
+    result += limited.slice(0, 2);
+    if (limited.length > 2) {
+      result += '-' + limited.slice(2, 6);
+      if (limited.length > 6) {
+        result += '-' + limited.slice(6, 9);
+      }
+    }
+  }
+  return result || input;
+};
+
 const SubmissionDetailView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -41,7 +58,7 @@ const SubmissionDetailView = () => {
         new Promise(resolve => setTimeout(resolve, 1200))
       ]);
       setSubmission(response.data);
-      
+
       // Fetch contribution report if it's a Drive link
       if (response.data.submission_type === 'drive_link') {
         fetchContributionReport();
@@ -166,7 +183,7 @@ const SubmissionDetailView = () => {
             </div>
             <div className="info-item">
               <span className="info-label">Student ID</span>
-              <span className="info-value">{submission.student_id || 'Not provided'}</span>
+              <span className="info-value">{formatStudentId(submission.student_id)}</span>
             </div>
             <div className="info-item">
               <span className="info-label">Submission Date</span>
@@ -339,13 +356,13 @@ const SubmissionDetailView = () => {
 
         {/* Collaborative Effort Report (Google Drive Only) */}
         {submission.submission_type === 'drive_link' && (
-          <Card 
+          <Card
             title={
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
                 <Users size={20} />
                 Collaborative Effort Report
               </div>
-            } 
+            }
             className="h-full"
           >
             {reportLoading ? (
@@ -358,7 +375,7 @@ const SubmissionDetailView = () => {
                 <div className="text-sm text-gray-500 mb-4">
                   Total Revisions Analyzed: <strong>{contributionReport.totalRevisions}</strong>
                 </div>
-                
+
                 <div className="space-y-4">
                   {contributionReport.contributors.map((contributor, idx) => (
                     <div key={idx} className="contribution-item">
@@ -380,18 +397,18 @@ const SubmissionDetailView = () => {
                           </div>
                         </div>
                       </div>
-                      
+
                       {/* Custom Progress Bar */}
-                      <div style={{ 
-                        height: '8px', 
-                        width: '100%', 
-                        background: '#f3f4f6', 
+                      <div style={{
+                        height: '8px',
+                        width: '100%',
+                        background: '#f3f4f6',
                         borderRadius: '4px',
                         overflow: 'hidden'
                       }}>
-                        <div style={{ 
-                          height: '100%', 
-                          width: `${contributor.contributionPercent}%`, 
+                        <div style={{
+                          height: '100%',
+                          width: `${contributor.contributionPercent}%`,
                           background: contributor.email === 'unverified' ? '#9ca3af' : 'var(--color-maroon)',
                           transition: 'width 1s ease-out'
                         }}></div>
@@ -399,7 +416,7 @@ const SubmissionDetailView = () => {
                     </div>
                   ))}
                 </div>
-                
+
                 <div className="mt-6 p-3 bg-gray-50 rounded-lg border border-gray-100 italic text-xs text-gray-500">
                   <AlertCircle size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
                   Revision stats are based on Google Drive history. Unverified contributors include anonymous or non-Gmail users.
@@ -433,7 +450,6 @@ const SubmissionDetailView = () => {
                   <tr>
                     <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/2">Criteria</th>
                     <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Rating</th>
-                    <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Score (0-10)</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -456,18 +472,12 @@ const SubmissionDetailView = () => {
                         </td>
                         <td className="px-4 py-3 align-top text-center">
                           {result?.rating ? (
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${result.rating === 'High' ? 'bg-green-100 text-green-800' :
-                              result.rating === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-red-100 text-red-800'
-                              }`}>
+                            <span className={`badge-rating ${result.rating.toLowerCase()}`}>
                               {result.rating}
                             </span>
                           ) : (
                             <span className="text-gray-300">-</span>
                           )}
-                        </td>
-                        <td className="px-4 py-3 align-top text-center font-semibold text-gray-700">
-                          {result?.score !== undefined ? result.score : '-'}
                         </td>
                       </tr>
                     );

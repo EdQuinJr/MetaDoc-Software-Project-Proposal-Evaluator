@@ -9,7 +9,10 @@ import {
     AlertCircle,
     Loader2,
     ArrowUpDown,
-    Trash2
+    Trash2,
+    Plus,
+    Save,
+    X
 } from 'lucide-react';
 import { dashboardAPI } from '../services/api';
 import Card from '../components/common/Card/Card';
@@ -25,6 +28,18 @@ const ClassRecord = () => {
     const [sortBy, setSortBy] = useState('name-asc');
     const [error, setError] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
+
+    // Modal state
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [currentStudentId, setCurrentStudentId] = useState(null); // Database ID
+    const [formData, setFormData] = useState({
+        student_id: '',
+        last_name: '',
+        first_name: '',
+        email: ''
+    });
+
     const fileInputRef = useRef(null);
 
     // Student records from backend
@@ -44,6 +59,16 @@ const ClassRecord = () => {
         }
     }, [selectedFolder]);
 
+    // Auto-clear error after 3 seconds
+    useEffect(() => {
+        if (error) {
+            const timer = setTimeout(() => {
+                setError(null);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [error]);
+
     const fetchFolders = async () => {
         try {
             setFetchingFolders(true);
@@ -62,7 +87,8 @@ const ClassRecord = () => {
             const response = await dashboardAPI.getDeadlineStudents(selectedFolder);
             // Map backend fields to frontend display fields
             const mapped = (response.data.students || []).map(s => ({
-                id: s.student_id,
+                id: s.id, // Database UUID
+                studentId: formatStudentId(s.student_id), // Format for display
                 lastName: s.last_name,
                 firstName: s.first_name,
                 email: s.email,
@@ -135,12 +161,83 @@ const ClassRecord = () => {
         reader.readAsText(file);
     };
 
-    const handleToggleSelect = (studentId) => {
+    const handleToggleSelect = (id) => {
         setSelectedIds(prev =>
-            prev.includes(studentId)
-                ? prev.filter(id => id !== studentId)
-                : [...prev, studentId]
+            prev.includes(id)
+                ? prev.filter(i => i !== id)
+                : [...prev, id]
         );
+    };
+
+    const formatStudentId = (input) => {
+        if (!input) return '';
+        // Remove all non-digits
+        const digits = input.replace(/\D/g, '');
+        
+        // Pattern: XX-XXXX-XXX (total 9 digits)
+        const limited = digits.slice(0, 9);
+        
+        let result = '';
+        if (limited.length > 0) {
+            result += limited.slice(0, 2);
+            if (limited.length > 2) {
+                result += '-' + limited.slice(2, 6);
+                if (limited.length > 6) {
+                    result += '-' + limited.slice(6, 9);
+                }
+            }
+        }
+        return result;
+    };
+
+    const handleRowChange = (id, field, value) => {
+        const finalValue = field === 'studentId' ? formatStudentId(value) : value;
+        setClassRows(prev => prev.map(row =>
+            row.id === id ? { ...row, [field]: finalValue } : row
+        ));
+    };
+
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter') {
+            handleBulkSave();
+        }
+    };
+
+    const handleBulkSave = async () => {
+        if (selectedIds.length === 0) return;
+
+        try {
+            setLoading(true);
+            const errors = [];
+            for (const id of selectedIds) {
+                const row = classRows.find(r => r.id === id);
+                if (row) {
+                    try {
+                        const updateData = {
+                            student_id: row.studentId,
+                            last_name: row.lastName,
+                            first_name: row.firstName,
+                            email: row.email
+                        };
+                        await dashboardAPI.updateDeadlineStudent(row.deadlineId, row.id, updateData);
+                    } catch (err) {
+                        errors.push(row.studentId);
+                    }
+                }
+            }
+
+            if (errors.length > 0) {
+                setError(`Failed to save some records: ${errors.length} errors occurred.`);
+            } else {
+                fetchStudents();
+                setSelectedIds([]);
+            }
+        } catch (err) {
+            console.error('Bulk save error:', err);
+            setError('An error occurred during save.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleBulkDelete = async () => {
@@ -153,13 +250,14 @@ const ClassRecord = () => {
         try {
             setLoading(true);
             const errors = [];
-            for (const studentId of selectedIds) {
-                const student = classRows.find(r => r.id === studentId);
+            for (const id of selectedIds) {
+                const student = classRows.find(r => r.id === id);
                 if (student) {
                     try {
+                        // Use database ID (UUID) for safer deletion
                         await dashboardAPI.deleteDeadlineStudent(student.deadlineId, student.id);
                     } catch (err) {
-                        errors.push(student.id);
+                        errors.push(student.studentId);
                     }
                 }
             }
@@ -178,18 +276,33 @@ const ClassRecord = () => {
         }
     };
 
-    const handleDeleteStudent = async (studentId, deadlineId) => {
-        if (!window.confirm('Are you sure you want to delete this student record?')) {
+    const handleOpenAddModal = () => {
+        setIsEditing(false);
+        setCurrentStudentId(null);
+        setFormData({
+            student_id: '',
+            last_name: '',
+            first_name: '',
+            email: ''
+        });
+        setIsModalOpen(true);
+    };
+
+    const handleModalSubmit = async (e) => {
+        e.preventDefault();
+        if (!selectedFolder || selectedFolder === 'all') {
+            setError('Please select a specific folder first.');
             return;
         }
 
         try {
             setLoading(true);
-            await dashboardAPI.deleteDeadlineStudent(deadlineId, studentId);
+            await dashboardAPI.addDeadlineStudent(selectedFolder, formData);
+            setIsModalOpen(false);
             fetchStudents();
         } catch (err) {
-            console.error('Failed to delete student:', err);
-            setError('Failed to delete student record.');
+            console.error('Operation failed:', err);
+            setError(err.response?.data?.error || 'Failed to process student record.');
         } finally {
             setLoading(false);
         }
@@ -265,7 +378,25 @@ const ClassRecord = () => {
                                 </div>
 
                                 {selectedIds.length > 0 && (
-                                    <div className="bulk-actions fade-in" style={{ display: 'flex', alignItems: 'center' }}>
+                                    <div className="bulk-actions fade-in" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <button
+                                            onClick={handleBulkSave}
+                                            style={{
+                                                color: '#000000',
+                                                background: 'none',
+                                                border: 'none',
+                                                padding: '4px',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                transition: 'none'
+                                            }}
+                                            title="Save Changes"
+                                            disabled={loading}
+                                        >
+                                            <Save size={16} />
+                                            <span style={{ marginLeft: '4px', fontSize: '0.85rem', fontWeight: '500' }}>Save</span>
+                                        </button>
                                         <button
                                             onClick={handleBulkDelete}
                                             style={{
@@ -287,9 +418,21 @@ const ClassRecord = () => {
                                     </div>
                                 )}
                             </div>
-                            {selectedFolder && classRows.length > 0 && (
-                                <span className="record-count">{classRows.length} Students</span>
-                            )}
+
+                            <div className="table-actions">
+                                {selectedFolder && selectedFolder !== 'all' && (
+                                    <button
+                                        className="add-student-btn-maroon"
+                                        onClick={handleOpenAddModal}
+                                        title="Add Student Manually"
+                                    >
+                                        <Plus size={16} />
+                                    </button>
+                                )}
+                                {selectedFolder && classRows.length > 0 && (
+                                    <span className="record-count">{classRows.length} Students</span>
+                                )}
+                            </div>
                         </div>
 
                         <div className="table-container">
@@ -326,7 +469,7 @@ const ClassRecord = () => {
                                                 .filter(row => {
                                                     const searchStr = searchTerm.toLowerCase();
                                                     return (
-                                                        (row.id?.toLowerCase() || '').includes(searchStr) ||
+                                                        (row.studentId?.toLowerCase() || '').includes(searchStr) ||
                                                         (row.lastName?.toLowerCase() || '').includes(searchStr) ||
                                                         (row.firstName?.toLowerCase() || '').includes(searchStr) ||
                                                         (row.email?.toLowerCase() || '').includes(searchStr)
@@ -422,11 +565,47 @@ const ClassRecord = () => {
                                                             {row.deadlineTitle}
                                                         </td>
                                                     )}
-                                                    <td className="font-mono">{row.id}</td>
-                                                    <td className="font-bold">{row.lastName}</td>
-                                                    <td>{row.firstName}</td>
+                                                    <td className="font-mono">
+                                                        {selectedIds.includes(row.id) ? (
+                                                            <input
+                                                                className="inline-edit-input"
+                                                                value={row.studentId}
+                                                                onChange={(e) => handleRowChange(row.id, 'studentId', e.target.value)}
+                                                                onKeyDown={handleKeyPress}
+                                                            />
+                                                        ) : row.studentId}
+                                                    </td>
+                                                    <td className="font-bold">
+                                                        {selectedIds.includes(row.id) ? (
+                                                            <input
+                                                                className="inline-edit-input font-bold"
+                                                                value={row.lastName}
+                                                                onChange={(e) => handleRowChange(row.id, 'lastName', e.target.value)}
+                                                                onKeyDown={handleKeyPress}
+                                                            />
+                                                        ) : row.lastName}
+                                                    </td>
                                                     <td>
-                                                        <span className="text-blue-600 underline">{row.email}</span>
+                                                        {selectedIds.includes(row.id) ? (
+                                                            <input
+                                                                className="inline-edit-input"
+                                                                value={row.firstName}
+                                                                onChange={(e) => handleRowChange(row.id, 'firstName', e.target.value)}
+                                                                onKeyDown={handleKeyPress}
+                                                            />
+                                                        ) : row.firstName}
+                                                    </td>
+                                                    <td>
+                                                        {selectedIds.includes(row.id) ? (
+                                                            <input
+                                                                className="inline-edit-input text-blue-600"
+                                                                value={row.email}
+                                                                onChange={(e) => handleRowChange(row.id, 'email', e.target.value)}
+                                                                onKeyDown={handleKeyPress}
+                                                            />
+                                                        ) : (
+                                                            <span className="text-blue-600 underline">{row.email}</span>
+                                                        )}
                                                     </td>
                                                     <td>
                                                         {row.status === 'Registered' ? (
@@ -457,7 +636,81 @@ const ClassRecord = () => {
                 </div>
             </div>
 
-            {/* Hidden Input for Future Import Logic if needed */}
+            {/* Manual Student Add/Edit Modal */}
+            {isModalOpen && (
+                <div className="modal-overlay">
+                    <div className="modal-content student-modal">
+                        <div className="modal-header">
+                            <h2>{isEditing ? 'Edit Student Record' : 'Add New Student'}</h2>
+                            <button className="modal-close" onClick={() => setIsModalOpen(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleModalSubmit}>
+                            <div className="form-group">
+                                <label>Student ID Number</label>
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="22-1686-452"
+                                    value={formData.student_id}
+                                    onChange={(e) => setFormData({ ...formData, student_id: formatStudentId(e.target.value) })}
+                                />
+                            </div>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Last Name</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        placeholder="Surname"
+                                        value={formData.last_name}
+                                        onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>First Name</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        placeholder="Given Name"
+                                        value={formData.first_name}
+                                        onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="form-group">
+                                <label>Email Address (Gmail Preferred)</label>
+                                <input
+                                    type="email"
+                                    placeholder="student@gmail.com"
+                                    value={formData.email}
+                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                />
+                                <p className="form-hint">Used for matching document activity.</p>
+                            </div>
+                            <div className="modal-footer">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => setIsModalOpen(false)}
+                                    disabled={loading}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    variant="primary"
+                                    disabled={loading}
+                                >
+                                    {loading ? 'Processing...' : (isEditing ? 'Update Record' : 'Add Student')}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
             <input
                 type="file"
                 ref={fileInputRef}

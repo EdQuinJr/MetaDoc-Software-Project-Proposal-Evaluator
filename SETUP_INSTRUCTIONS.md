@@ -9,12 +9,10 @@ This guide provides step-by-step instructions for setting up the MetaDoc backend
 
 Before you begin, ensure you have:
 
-- **Python 3.10 or higher** (Download from [python.org](https://www.python.org/downloads/))
-  - ✅ Tested and working on Python 3.13
-  - ✅ Tested and working on Python 3.10-3.12
+- **Python 3.10 to 3.13** (Download from [python.org](https://www.python.org/downloads/))
 - **Git** (for cloning the repository)
-- **MySQL Server** (optional - SQLite works fine for development)
-- **Google Cloud Account** (for OAuth and Drive API)
+- **Google Cloud Account** (for Unified OAuth, Drive API, and Gemini AI)
+- **SQLite** (Default) or **PostgreSQL** (Recommended for Production)
 
 ## 🚀 Quick Start (5 Minutes)
 
@@ -95,28 +93,18 @@ python run.py
 
 ## ⚙️ Configuration
 
-### Google Cloud Setup (Required)
+### Provider Configuration (REQUIRED)
 
-1. **Create Google Cloud Project**
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a new project
+#### 1. Google Cloud (Unified Authentication & API)
+- **Enable APIs**: Drive API, Gemini AI API.
+- **Create OAuth Client ID**: Type "Web application".
+- **Redirect URIs**:
+  ```
+  http://localhost:5000/auth/google/callback
+  http://localhost:5173/auth/callback
+  ```
+- **Gemini**: Obtain an API Key from [AI Studio](https://aistudio.google.com/).
 
-2. **Enable APIs**
-   - Navigate to "APIs & Services" → "Library"
-   - Enable:
-     - Google Drive API
-     - Google OAuth2 API
-
-3. **Create OAuth 2.0 Credentials**
-   - Go to "APIs & Services" → "Credentials"
-   - Click "Create Credentials" → "OAuth 2.0 Client ID"
-   - Application type: "Web application"
-   - Authorized redirect URIs:
-     ```
-     http://localhost:5000/auth/google/callback
-     http://127.0.0.1:5000/auth/google/callback
-     ```
-   - Save your Client ID and Client Secret
 
 ### Environment Variables (.env file)
 
@@ -135,38 +123,24 @@ DATABASE_URL=sqlite:///metadoc.db
 # DATABASE_URL=postgresql://username:password@localhost:5432/metadoc_db
 
 # ============================================
-# Google OAuth2 (REQUIRED)
+# Auth Configuration (REQUIRED)
 # ============================================
-GOOGLE_CLIENT_ID=your_client_id_here.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-your_secret_here
+# Google (Unified OAuth 2.0)
+GOOGLE_CLIENT_ID=your_google_id
+GOOGLE_CLIENT_SECRET=your_google_secret
 GOOGLE_REDIRECT_URI=http://localhost:5000/auth/google/callback
 
-# Optional: Service account for Drive API
-# GOOGLE_SERVICE_ACCOUNT_FILE=path/to/service-account-key.json
+# ============================================
+# AI & Content (REQUIRED)
+# ============================================
+GEMINI_API_KEY=your_gemini_api_key_here
 
 # ============================================
-# Security (REQUIRED)
+# File Storage & Limits
 # ============================================
-# Generate random strings for production
-SECRET_KEY=your-super-secret-key-change-this
-JWT_SECRET_KEY=your-jwt-secret-key-change-this
-
-# ============================================
-# Institution Settings
-# ============================================
-ALLOWED_EMAIL_DOMAINS=cit.edu,yourdomain.edu
-INSTITUTION_NAME=Cebu Institute of Technology - University
-
-# ============================================
-# Optional: AI Features
-# ============================================
-# GEMINI_API_KEY=your_gemini_api_key_here
-
-# ============================================
-# Application Settings
-# ============================================
-FLASK_ENV=development
-FLASK_DEBUG=True
+UPLOAD_FOLDER=uploads
+MAX_FILE_SIZE=52428800  # 50MB
+ALLOWED_EMAIL_DOMAINS=cit.edu
 ```
 
 ---

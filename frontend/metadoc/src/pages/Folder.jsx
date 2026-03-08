@@ -21,6 +21,23 @@ import {
 } from 'lucide-react';
 import '../styles/Folder.css';
 
+const formatStudentId = (input) => {
+  if (!input) return 'N/A';
+  const digits = input.replace(/\D/g, '');
+  const limited = digits.slice(0, 9);
+  let result = '';
+  if (limited.length > 0) {
+    result += limited.slice(0, 2);
+    if (limited.length > 2) {
+      result += '-' + limited.slice(2, 6);
+      if (limited.length > 6) {
+        result += '-' + limited.slice(6, 9);
+      }
+    }
+  }
+  return result || input;
+};
+
 const Folder = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -495,7 +512,7 @@ const Folder = () => {
                       <td>
                         <span className="student-id-pill">
                           <Users size={14} className="icon-subtle" />
-                          {submission.student_id || 'N/A'}
+                          {formatStudentId(submission.student_id)}
                         </span>
                       </td>
                       <td>
@@ -613,7 +630,7 @@ const Folder = () => {
                   <h3 className="preview-title-large">{previewSubmission.original_filename}</h3>
 
                   <div className="preview-info-row">
-                    <span className="preview-info-item"><strong>Student ID:</strong> {previewSubmission.student_id}</span>
+                    <span className="preview-info-item"><strong>Student ID:</strong> {formatStudentId(previewSubmission.student_id)}</span>
                     <span className="preview-info-item"><strong>Submitted:</strong> {new Date(previewSubmission.created_at).toLocaleString()}</span>
                   </div>
 

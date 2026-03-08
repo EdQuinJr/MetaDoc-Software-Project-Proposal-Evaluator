@@ -1,9 +1,11 @@
 import os
 from datetime import timedelta
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # Optional: warn that python-dotenv is not installed
+    pass
 
 # Get backend directory path
 _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -31,19 +33,13 @@ class Config:
     # File Upload Configuration
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER') or './uploads'
     TEMP_STORAGE_PATH = os.environ.get('TEMP_STORAGE_PATH') or './temp_files'
-    MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 52428800))  # 50MB
+    MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH') or 52428800)  # 50MB
     
     # Google API Configuration
     GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
     GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
     GOOGLE_REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI')
     GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get('GOOGLE_SERVICE_ACCOUNT_FILE')
-    
-    # Microsoft API Configuration
-    MICROSOFT_CLIENT_ID = os.environ.get('MICROSOFT_CLIENT_ID')
-    MICROSOFT_CLIENT_SECRET = os.environ.get('MICROSOFT_CLIENT_SECRET')
-    MICROSOFT_TENANT_ID = os.environ.get('MICROSOFT_TENANT_ID', 'common')
-    MICROSOFT_REDIRECT_URI = os.environ.get('MICROSOFT_REDIRECT_URI')
     
     # Gemini AI Configuration (Optional)
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
@@ -58,8 +54,8 @@ class Config:
     # NLP Configuration
     NLP_MODEL_PATH = os.environ.get('NLP_MODEL_PATH') or './models'
     DEFAULT_LANGUAGE = os.environ.get('DEFAULT_LANGUAGE') or 'en'
-    MAX_DOCUMENT_WORDS = int(os.environ.get('MAX_DOCUMENT_WORDS', 15000))
-    MIN_DOCUMENT_WORDS = int(os.environ.get('MIN_DOCUMENT_WORDS', 50))
+    MAX_DOCUMENT_WORDS = int(os.environ.get('MAX_DOCUMENT_WORDS') or 15000)
+    MIN_DOCUMENT_WORDS = int(os.environ.get('MIN_DOCUMENT_WORDS') or 50)
     
     # Report Configuration
     REPORTS_STORAGE_PATH = os.environ.get('REPORTS_STORAGE_PATH') or './reports'
@@ -67,8 +63,8 @@ class Config:
     ENABLE_CSV_EXPORT = os.environ.get('ENABLE_CSV_EXPORT', 'True').lower() == 'true'
     
     # Security Configuration
-    SESSION_TIMEOUT = int(os.environ.get('SESSION_TIMEOUT', 3600))
-    API_RATE_LIMIT = int(os.environ.get('API_RATE_LIMIT', 100))
+    SESSION_TIMEOUT = int(os.environ.get('SESSION_TIMEOUT') or 3600)
+    API_RATE_LIMIT = int(os.environ.get('API_RATE_LIMIT') or 100)
     ENABLE_AUDIT_LOGGING = os.environ.get('ENABLE_AUDIT_LOGGING', 'True').lower() == 'true'
     
     # Session Cookie Configuration for Cross-Origin (localhost ports)

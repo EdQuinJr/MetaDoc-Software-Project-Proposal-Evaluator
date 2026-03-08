@@ -643,6 +643,56 @@ def delete_deadline_student(deadline_id, student_id):
     except Exception as e:
         current_app.logger.error(f"Delete student error: {e}")
         return jsonify({'error': 'Error deleting student record'}), 500
+
+@dashboard_bp.route('/deadlines/<deadline_id>/students/add', methods=['POST'])
+@require_authentication()
+def add_deadline_student(deadline_id):
+    """Manually add a single student to a deadline folder"""
+    try:
+        user_id = request.current_user.id
+        data = request.get_json()
+        
+        if not data or not data.get('student_id') or not data.get('last_name'):
+            return jsonify({'error': 'Student ID and Last Name are required'}), 400
+        
+        student, error = dashboard_service.add_student(deadline_id, user_id, data)
+        
+        if error:
+            return jsonify({'error': error}), 400
+        
+        return jsonify({
+            'message': 'Student added successfully',
+            'student': student
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Add student error: {e}")
+        return jsonify({'error': 'Error adding student record'}), 500
+
+@dashboard_bp.route('/deadlines/<deadline_id>/students/<student_id>', methods=['PUT'])
+@require_authentication()
+def update_deadline_student(deadline_id, student_id):
+    """Update an existing student record"""
+    try:
+        user_id = request.current_user.id
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No update data provided'}), 400
+        
+        student, error = dashboard_service.update_student(student_id, deadline_id, user_id, data)
+        
+        if error:
+            return jsonify({'error': error}), 400
+        
+        return jsonify({
+            'message': 'Student updated successfully',
+            'student': student
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Update student error: {e}")
+        return jsonify({'error': 'Error updating student record'}), 500
 @dashboard_bp.route('/submissions/<submission_id>/contribution-report', methods=['GET'])
 @require_authentication()
 def get_contribution_report(submission_id):

@@ -20,6 +20,23 @@ import Badge from '../components/common/Badge/Badge';
 import Modal from '../components/common/Modal/Modal';
 import '../styles/Dashboard.css';
 
+const formatStudentId = (input) => {
+  if (!input) return 'N/A';
+  const digits = input.replace(/\D/g, '');
+  const limited = digits.slice(0, 9);
+  let result = '';
+  if (limited.length > 0) {
+    result += limited.slice(0, 2);
+    if (limited.length > 2) {
+      result += '-' + limited.slice(2, 6);
+      if (limited.length > 6) {
+        result += '-' + limited.slice(6, 9);
+      }
+    }
+  }
+  return result || input;
+};
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [overview, setOverview] = useState(null);
@@ -155,7 +172,7 @@ const Dashboard = () => {
       render: (submission) => (
         <span className="student-id-pill">
           <Users size={14} className="icon-subtle" />
-          {submission.student_id || 'N/A'}
+          {formatStudentId(submission.student_id)}
         </span>
       )
     },
@@ -291,7 +308,10 @@ const Dashboard = () => {
         <div className="compact-content">
           <select
             value={selectedDeadline}
-            onChange={(e) => setSelectedDeadline(e.target.value)}
+            onChange={(e) => {
+              setSelectedDeadline(e.target.value);
+              setSubmissionToken(null);
+            }}
             className="compact-select"
           >
             <option value="">No Deadline</option>

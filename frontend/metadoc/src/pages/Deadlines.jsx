@@ -400,7 +400,7 @@ const Deadlines = () => {
                     ))}
                   </select>
                   <small className="form-text text-gray-500">
-                    Select a rubric to enable AI-guided scoring for submissions.
+                    Select a rubric to enable AI-guided evaluation guidance for submissions.
                   </small>
                 </div>
 

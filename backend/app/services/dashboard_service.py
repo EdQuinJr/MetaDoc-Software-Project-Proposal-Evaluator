@@ -397,19 +397,35 @@ class DashboardService:
             if not deadline:
                 return None, "Deadline not found"
             
+            # Get all deadline IDs for this professor to check for duplicates across all folders
+            prof_deadline_ids = [d.id for d in Deadline.query.filter_by(professor_id=user_id).all()]
+            
             imported_count = 0
             updated_count = 0
+            duplicate_errors = []
             
             for data in students_data:
                 student_id = data.get('student_id')
                 if not student_id:
                     continue
                 
-                # Check for existing student in this class
+                # 1. Check for existing student in THIS specific folder (for updates)
                 existing = Student.query.filter_by(
                     student_id=student_id,
                     deadline_id=deadline_id
                 ).first()
+                
+                if not existing:
+                    # 2. Check if they exist in ANOTHER folder belonging to this professor
+                    other_folder_student = Student.query.filter(
+                        Student.student_id == student_id,
+                        Student.deadline_id.in_(prof_deadline_ids),
+                        Student.deadline_id != deadline_id
+                    ).first()
+                    
+                    if other_folder_student:
+                        duplicate_errors.append(student_id)
+                        continue
                 
                 if existing:
                     # Update info
@@ -459,13 +475,19 @@ class DashboardService:
             db.session.commit()
             
             if imported_count == 0 and updated_count == 0:
-                return None, "No valid student records were found in the provided data. Please ensure the column names match the expected format."
+                if duplicate_errors:
+                    return None, f"Import failed: {len(duplicate_errors)} IDs exist in other folders."
+                return None, "No valid records found in CSV."
 
-            return {
+            response_data = {
                 'imported': imported_count,
                 'updated': updated_count,
                 'total': Student.query.filter_by(deadline_id=deadline_id).count()
-            }, None
+            }
+            if duplicate_errors:
+                response_data['warning'] = f"Skipped {len(duplicate_errors)} duplicates."
+            
+            return response_data, None
             
         except Exception as e:
             db.session.rollback()
@@ -479,8 +501,8 @@ class DashboardService:
             if not deadline:
                 return False, "Folder not found"
             
-            # Find the specific student in this folder
-            student = Student.query.filter_by(student_id=student_id, deadline_id=deadline_id).first()
+            # Find the specific student in this folder using database primary key (UUID)
+            student = Student.query.filter_by(id=student_id, deadline_id=deadline_id).first()
             if not student:
                 return False, "Student record not found"
             
@@ -493,3 +515,86 @@ class DashboardService:
             db.session.rollback()
             current_app.logger.error(f"Delete student error: {e}")
             return False, str(e)
+    def add_student(self, deadline_id, user_id, student_data):
+        """
+        Manually add a single student to a deadline folder
+        """
+        try:
+            deadline = Deadline.query.filter_by(id=deadline_id, professor_id=user_id).first()
+            if not deadline:
+                return None, "Folder not found"
+            
+            student_id = student_data.get('student_id')
+            if not student_id:
+                return None, "Student ID is required"
+            
+            # 1. Check for duplicate in THIS folder
+            existing = Student.query.filter_by(student_id=student_id, deadline_id=deadline_id).first()
+            if existing:
+                return None, "ID already exists in this folder."
+            
+            # 2. Check for duplicate in ANY other folder of this professor
+            prof_deadline_ids = [d.id for d in Deadline.query.filter_by(professor_id=user_id).all()]
+            other_folder_student = Student.query.filter(
+                Student.student_id == student_id,
+                Student.deadline_id.in_(prof_deadline_ids)
+            ).first()
+            
+            if other_folder_student:
+                other_deadline = Deadline.query.get(other_folder_student.deadline_id)
+                folder_name = other_deadline.title if other_deadline else "another folder"
+                return None, f"Registered in folder '{folder_name}'."
+            
+            new_student = Student(
+                student_id=student_id,
+                last_name=student_data.get('last_name'),
+                first_name=student_data.get('first_name'),
+                email=student_data.get('email'),
+                deadline_id=deadline_id,
+                is_registered=False
+            )
+            
+            db.session.add(new_student)
+            db.session.commit()
+            
+            return new_student.to_dict(), None
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Add student error: {e}")
+            return None, str(e)
+
+    def update_student(self, student_id, deadline_id, user_id, student_data):
+        """
+        Update an existing student record (using database task id)
+        """
+        try:
+            deadline = Deadline.query.filter_by(id=deadline_id, professor_id=user_id).first()
+            if not deadline:
+                return None, "Folder not found"
+            
+            # student_id here is the primary key (UUID)
+            student = Student.query.filter_by(id=student_id, deadline_id=deadline_id).first()
+            if not student:
+                return None, "Student record not found"
+            
+            if 'student_id' in student_data:
+                new_sid = student_data['student_id']
+                if new_sid != student.student_id:
+                    conflict = Student.query.filter_by(student_id=new_sid, deadline_id=deadline_id).first()
+                    if conflict:
+                        return None, f"Student with ID {new_sid} already exists."
+                student.student_id = new_sid
+                
+            if 'last_name' in student_data:
+                student.last_name = student_data['last_name']
+            if 'first_name' in student_data:
+                student.first_name = student_data['first_name']
+            if 'email' in student_data:
+                student.email = student_data['email']
+            
+            db.session.commit()
+            return student.to_dict(), None
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Update student error: {e}")
+            return None, str(e)

@@ -236,6 +236,53 @@ def register_student():
         current_app.logger.error(f"Student registration error: {e}")
         return jsonify({'error': 'Failed to complete registration'}), 500
 
+@submission_bp.route('/student-links', methods=['GET'])
+@require_authentication()
+def get_student_links():
+    """Get all submission links authorized for the current student"""
+    try:
+        from app.models import Student, SubmissionToken, Deadline
+        user = request.current_user
+        
+        # Get all students with this email
+        student_records = Student.query.filter(
+            db.func.lower(Student.email) == user.email.lower()
+        ).all()
+        
+        if not student_records:
+            return jsonify({'links': []}), 200
+            
+        deadline_ids = [s.deadline_id for s in student_records]
+        
+        # Find active tokens for these deadlines
+        tokens = SubmissionToken.query.filter(
+            SubmissionToken.deadline_id.in_(deadline_ids),
+            SubmissionToken.is_active == True,
+            SubmissionToken.expires_at > datetime.utcnow()
+        ).all()
+        
+        links = []
+        for token in tokens:
+            deadline = Deadline.query.get(token.deadline_id)
+            links.append({
+                'token': token.token,
+                'deadline_title': deadline.title if deadline else "Unknown Deadline",
+                'deadline_id': token.deadline_id,
+                'expires_at': token.expires_at.isoformat(),
+                'professor_name': token.professor.name if token.professor else "Professor"
+            })
+            
+        # Sort by creation date (using BaseModel.created_at) if available
+        links.sort(key=lambda x: tokens[[t.token for t in tokens].index(x['token'])].created_at, reverse=True)
+            
+        return jsonify({'links': links}), 200
+        
+    except Exception as e:
+        import traceback
+        current_app.logger.error(f"Error fetching student links: {e}")
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({'error': 'Internal server error'}), 500
+
 @submission_bp.route('/upload', methods=['POST'])
 @require_authentication()
 def upload_file():
