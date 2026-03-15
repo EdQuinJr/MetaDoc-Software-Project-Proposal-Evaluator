@@ -21,6 +21,38 @@ class DashboardService:
     
     def __init__(self):
         pass
+
+    def _normalize_text(self, value):
+        return (value or '').strip()
+
+    def _normalize_lower(self, value):
+        return self._normalize_text(value).lower()
+
+    def _normalize_full_name(self, first_name, last_name):
+        return f"{self._normalize_lower(first_name)} {self._normalize_lower(last_name)}".strip()
+
+    def _validate_student_uniqueness(self, user_id, student_id, first_name, last_name, email=None, exclude_id=None):
+        """Validate uniqueness per professor for student_id, full name, and email."""
+        sid_norm = self._normalize_text(student_id)
+        email_norm = self._normalize_lower(email)
+        name_norm = self._normalize_full_name(first_name, last_name)
+
+        students = Student.query.filter_by(professor_id=user_id).all()
+
+        for existing in students:
+            if exclude_id and existing.id == exclude_id:
+                continue
+
+            if sid_norm and self._normalize_text(existing.student_id) == sid_norm:
+                return f"Student ID {sid_norm} already exists."
+
+            if email_norm and self._normalize_lower(existing.email) == email_norm:
+                return f"Gmail {email_norm} already exists."
+
+            if name_norm and self._normalize_full_name(existing.first_name, existing.last_name) == name_norm:
+                return f"Student name '{self._normalize_text(first_name)} {self._normalize_text(last_name)}' already exists."
+
+        return None
     
     def get_dashboard_overview(self, user_id):
         """Get dashboard overview statistics for professor"""
@@ -108,16 +140,34 @@ class DashboardService:
             submissions = Submission.query.filter_by(
                 professor_id=user_id
             ).order_by(desc(Submission.created_at)).limit(limit).all()
+
+            student_rows = Student.query.filter_by(professor_id=user_id).all()
+
+            def _norm_student_id(value):
+                return ''.join(ch for ch in str(value or '') if ch.isalnum()).lower()
+
+            students_by_sid = {
+                _norm_student_id(st.student_id): st
+                for st in student_rows
+                if st.student_id
+            }
             
-            return [{
-                'id': s.id,
-                'job_id': s.job_id,
-                'file_name': s.original_filename,
-                'student_name': s.student_name,
-                'student_id': s.student_id,
-                'status': s.status.value,
-                'created_at': s.created_at.isoformat()
-            } for s in submissions]
+            recent = []
+            for s in submissions:
+                student_row = students_by_sid.get(_norm_student_id(s.student_id))
+                recent.append({
+                    'id': s.id,
+                    'job_id': s.job_id,
+                    'deliverable': s.deadline.title if hasattr(s, 'deadline') and s.deadline and s.deadline.title else 'Untitled Deliverable',
+                    'file_name': s.original_filename,
+                    'student_name': s.student_name,
+                    'student_id': s.student_id,
+                    'team_code': student_row.team_code if student_row and student_row.team_code else None,
+                    'status': s.status.value,
+                    'created_at': s.created_at.isoformat()
+                })
+
+            return recent
             
         except Exception as e:
             current_app.logger.error(f"Recent submissions error: {e}")
@@ -166,14 +216,69 @@ class DashboardService:
                         )
                     )
             
+            student_rows = Student.query.filter_by(professor_id=user_id).all()
+            deadline_rows = Deadline.query.filter_by(professor_id=user_id).all()
+
             query = query.order_by(desc(Submission.created_at))
-            
-            pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-            
-            # Serialize submissions to dictionaries
+
+            def _norm_student_id(value):
+                return ''.join(ch for ch in str(value or '') if ch.isalnum()).lower()
+
+            def _norm_deadline_id(value):
+                return str(value) if value is not None else None
+
+            students_by_sid = {
+                _norm_student_id(st.student_id): st
+                for st in student_rows
+                if st.student_id
+            }
+
+            deadlines_by_id = {
+                _norm_deadline_id(dl.id): dl
+                for dl in deadline_rows
+            }
+
             from app.schemas.dto.submission_dto import SubmissionListDTO
-            serialized_submissions = [SubmissionListDTO.serialize(s) for s in pagination.items]
-            
+
+            def _enrich_submission_items(items):
+                serialized_items = [SubmissionListDTO.serialize(s) for s in items]
+
+                for item in serialized_items:
+                    student = students_by_sid.get(_norm_student_id(item.get('student_id')))
+                    item['course_year'] = student.course_year if student and student.course_year else None
+                    item['team_code'] = student.team_code if student and student.team_code else None
+                    if (not item.get('student_name')) and student:
+                        item['student_name'] = f"{student.first_name} {student.last_name}".strip()
+
+                    deadline = deadlines_by_id.get(_norm_deadline_id(item.get('deadline_id')))
+                    item['deadline_title'] = deadline.title if deadline and deadline.title else None
+
+                return serialized_items
+
+            if filters and filters.get('team_code'):
+                serialized_submissions = _enrich_submission_items(query.all())
+                target_team_code = str(filters['team_code']).strip()
+                filtered_submissions = [
+                    item for item in serialized_submissions
+                    if str(item.get('team_code') or '').strip() == target_team_code
+                ]
+
+                total = len(filtered_submissions)
+                start = max((page - 1) * per_page, 0)
+                end = start + per_page
+                pages = (total + per_page - 1) // per_page if per_page else 1
+
+                return {
+                    'submissions': filtered_submissions[start:end],
+                    'total': total,
+                    'page': page,
+                    'per_page': per_page,
+                    'pages': pages
+                }, None
+
+            pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+            serialized_submissions = _enrich_submission_items(pagination.items)
+
             return {
                 'submissions': serialized_submissions,
                 'total': pagination.total,
@@ -247,8 +352,7 @@ class DashboardService:
                 deadline_datetime=datetime.fromisoformat(deadline_data['deadline_datetime']),
                 timezone=deadline_data.get('timezone', 'UTC'),
                 course_code=deadline_data.get('course_code'),
-                assignment_type=deadline_data.get('assignment_type'),
-                rubric_id=deadline_data.get('rubric_id')
+                assignment_type=deadline_data.get('assignment_type')
             )
             
             db.session.add(deadline)
@@ -284,8 +388,6 @@ class DashboardService:
                 deadline.course_code = deadline_data['course_code']
             if 'assignment_type' in deadline_data:
                 deadline.assignment_type = deadline_data['assignment_type']
-            if 'rubric_id' in deadline_data:
-                deadline.rubric_id = deadline_data['rubric_id']
             
             db.session.commit()
             
@@ -351,97 +453,77 @@ class DashboardService:
             current_app.logger.error(f"Deadlines list error: {e}")
             return None, str(e)
 
-    def get_students_for_deadline(self, deadline_id, user_id):
-        """Get all students registered/expected for a deadline (or all deadlines)"""
+    def get_students(self, user_id):
+        """Get all students registered/expected for the professor"""
         try:
-            if deadline_id == 'all':
-                # Get all deadlines for this professor
-                deadlines = Deadline.query.filter_by(professor_id=user_id).all()
-                deadline_ids = [d.id for d in deadlines]
-                deadline_map = {d.id: d.title for d in deadlines}
-                
-                if not deadline_ids:
-                    return [], None
-                    
-                students = Student.query.filter(Student.deadline_id.in_(deadline_ids)).order_by(Student.last_name).all()
-                
-                # Add deadline title to each student dict
-                student_dicts = []
-                for s in students:
-                    s_dict = s.to_dict()
-                    s_dict['deadline_title'] = deadline_map.get(s.deadline_id, 'Unknown')
-                    student_dicts.append(s_dict)
-                
-                return student_dicts, None
-
-            # Verify ownership for single deadline
-            deadline = Deadline.query.filter_by(id=deadline_id, professor_id=user_id).first()
-            if not deadline:
-                return None, "Deadline not found"
-            
-            students = Student.query.filter_by(deadline_id=deadline_id).order_by(Student.last_name).all()
+            students = Student.query.filter_by(professor_id=user_id).order_by(Student.created_at.asc()).all()
             return [s.to_dict() for s in students], None
             
         except Exception as e:
             current_app.logger.error(f"Get students error: {e}")
             return None, str(e)
 
-    def import_students(self, deadline_id, user_id, students_data):
+    def import_students(self, user_id, students_data):
         """
-        Import a list of students for a deadline
-        students_data: list of dicts with {student_id, last_name, first_name, email}
+        Import a list of students for a professor
+        students_data: list of dicts with {student_id, last_name, first_name, email, course_year, team_code}
         """
         try:
-            # Verify ownership
-            deadline = Deadline.query.filter_by(id=deadline_id, professor_id=user_id).first()
-            if not deadline:
-                return None, "Deadline not found"
-            
-            # Get all deadline IDs for this professor to check for duplicates across all folders
-            prof_deadline_ids = [d.id for d in Deadline.query.filter_by(professor_id=user_id).all()]
-            
             imported_count = 0
             updated_count = 0
-            duplicate_errors = []
+            seen_ids = set()
+            seen_emails = set()
+            seen_names = set()
             
             for data in students_data:
-                student_id = data.get('student_id')
+                student_id = self._normalize_text(data.get('student_id'))
                 if not student_id:
                     continue
+
+                first_name = self._normalize_text(data.get('first_name'))
+                last_name = self._normalize_text(data.get('last_name'))
+                email = self._normalize_lower(data.get('email'))
+                full_name = self._normalize_full_name(first_name, last_name)
+
+                if student_id in seen_ids:
+                    return None, f"Duplicate STUDENT NO. in CSV: {student_id}"
+                seen_ids.add(student_id)
+
+                if email:
+                    if email in seen_emails:
+                        return None, f"Duplicate GMAIL in CSV: {email}"
+                    seen_emails.add(email)
+
+                if full_name:
+                    if full_name in seen_names:
+                        return None, f"Duplicate NAME OF STUDENT in CSV: {first_name} {last_name}"
+                    seen_names.add(full_name)
                 
-                # 1. Check for existing student in THIS specific folder (for updates)
                 existing = Student.query.filter_by(
                     student_id=student_id,
-                    deadline_id=deadline_id
+                    professor_id=user_id
                 ).first()
-                
-                if not existing:
-                    # 2. Check if they exist in ANOTHER folder belonging to this professor
-                    other_folder_student = Student.query.filter(
-                        Student.student_id == student_id,
-                        Student.deadline_id.in_(prof_deadline_ids),
-                        Student.deadline_id != deadline_id
-                    ).first()
-                    
-                    if other_folder_student:
-                        duplicate_errors.append(student_id)
-                        continue
+
+                uniqueness_error = self._validate_student_uniqueness(
+                    user_id=user_id,
+                    student_id=student_id,
+                    first_name=first_name,
+                    last_name=last_name,
+                    email=email,
+                    exclude_id=existing.id if existing else None
+                )
+                if uniqueness_error:
+                    return None, uniqueness_error
                 
                 if existing:
                     # Update info
-                    existing.last_name = data.get('last_name', existing.last_name)
-                    existing.first_name = data.get('first_name', existing.first_name)
+                    existing.last_name = last_name or existing.last_name
+                    existing.first_name = first_name or existing.first_name
+                    existing.course_year = data.get('course_year', existing.course_year)
+                    existing.team_code = data.get('team_code', existing.team_code)
                     
                     # Update email if provided, otherwise check format
-                    email = data.get('email')
-                    if not email and existing.last_name and existing.first_name:
-                        # Auto-generate format: lastname.firstname@gmail.com
-                        clean_last = existing.last_name.lower().replace(' ', '')
-                        clean_first = existing.first_name.lower().replace(' ', '')
-                        email = f"{clean_last}.{clean_first}@gmail.com"
-                    
                     if email:
-                        email = email.lower().strip()
                         if email.endswith('@gmail.com'):
                             existing.email = email
                         
@@ -450,22 +532,16 @@ class DashboardService:
                     # Create new
                     new_student = Student(
                         student_id=student_id,
-                        last_name=data.get('last_name'),
-                        first_name=data.get('first_name'),
-                        deadline_id=deadline_id,
+                        last_name=last_name,
+                        first_name=first_name,
+                        course_year=data.get('course_year'),
+                        team_code=data.get('team_code'),
+                        professor_id=user_id,
                         is_registered=False
                     )
                     
                     # Handle email for new student
-                    email = data.get('email')
-                    if not email and new_student.last_name and new_student.first_name:
-                        # Auto-generate format: lastname.firstname@gmail.com
-                        clean_last = new_student.last_name.lower().replace(' ', '')
-                        clean_first = new_student.first_name.lower().replace(' ', '')
-                        email = f"{clean_last}.{clean_first}@gmail.com"
-                    
                     if email:
-                        email = email.lower().strip()
                         if email.endswith('@gmail.com'):
                             new_student.email = email
                         
@@ -475,17 +551,13 @@ class DashboardService:
             db.session.commit()
             
             if imported_count == 0 and updated_count == 0:
-                if duplicate_errors:
-                    return None, f"Import failed: {len(duplicate_errors)} IDs exist in other folders."
                 return None, "No valid records found in CSV."
 
             response_data = {
                 'imported': imported_count,
                 'updated': updated_count,
-                'total': Student.query.filter_by(deadline_id=deadline_id).count()
+                'total': Student.query.filter_by(professor_id=user_id).count()
             }
-            if duplicate_errors:
-                response_data['warning'] = f"Skipped {len(duplicate_errors)} duplicates."
             
             return response_data, None
             
@@ -493,16 +565,11 @@ class DashboardService:
             db.session.rollback()
             current_app.logger.error(f"Import students error: {e}")
             return None, str(e)
-    def delete_student(self, student_id, deadline_id, user_id):
-        """Delete a student record from a deadline folder"""
+    def delete_student(self, student_id, user_id):
+        """Delete a student record"""
         try:
-            # Verify folder ownership
-            deadline = Deadline.query.filter_by(id=deadline_id, professor_id=user_id).first()
-            if not deadline:
-                return False, "Folder not found"
-            
-            # Find the specific student in this folder using database primary key (UUID)
-            student = Student.query.filter_by(id=student_id, deadline_id=deadline_id).first()
+            # Find the specific student using database primary key
+            student = Student.query.filter_by(id=student_id, professor_id=user_id).first()
             if not student:
                 return False, "Student record not found"
             
@@ -515,42 +582,37 @@ class DashboardService:
             db.session.rollback()
             current_app.logger.error(f"Delete student error: {e}")
             return False, str(e)
-    def add_student(self, deadline_id, user_id, student_data):
+    def add_student(self, user_id, student_data):
         """
-        Manually add a single student to a deadline folder
+        Manually add a single student to the system
         """
         try:
-            deadline = Deadline.query.filter_by(id=deadline_id, professor_id=user_id).first()
-            if not deadline:
-                return None, "Folder not found"
-            
-            student_id = student_data.get('student_id')
+            student_id = self._normalize_text(student_data.get('student_id'))
+            first_name = self._normalize_text(student_data.get('first_name'))
+            last_name = self._normalize_text(student_data.get('last_name'))
+            email = self._normalize_lower(student_data.get('email'))
+
             if not student_id:
                 return None, "Student ID is required"
-            
-            # 1. Check for duplicate in THIS folder
-            existing = Student.query.filter_by(student_id=student_id, deadline_id=deadline_id).first()
-            if existing:
-                return None, "ID already exists in this folder."
-            
-            # 2. Check for duplicate in ANY other folder of this professor
-            prof_deadline_ids = [d.id for d in Deadline.query.filter_by(professor_id=user_id).all()]
-            other_folder_student = Student.query.filter(
-                Student.student_id == student_id,
-                Student.deadline_id.in_(prof_deadline_ids)
-            ).first()
-            
-            if other_folder_student:
-                other_deadline = Deadline.query.get(other_folder_student.deadline_id)
-                folder_name = other_deadline.title if other_deadline else "another folder"
-                return None, f"Registered in folder '{folder_name}'."
+
+            uniqueness_error = self._validate_student_uniqueness(
+                user_id=user_id,
+                student_id=student_id,
+                first_name=first_name,
+                last_name=last_name,
+                email=email
+            )
+            if uniqueness_error:
+                return None, uniqueness_error
             
             new_student = Student(
                 student_id=student_id,
-                last_name=student_data.get('last_name'),
-                first_name=student_data.get('first_name'),
-                email=student_data.get('email'),
-                deadline_id=deadline_id,
+                last_name=last_name,
+                first_name=first_name,
+                email=email,
+                course_year=student_data.get('course_year'),
+                team_code=student_data.get('team_code'),
+                professor_id=user_id,
                 is_registered=False
             )
             
@@ -563,34 +625,44 @@ class DashboardService:
             current_app.logger.error(f"Add student error: {e}")
             return None, str(e)
 
-    def update_student(self, student_id, deadline_id, user_id, student_data):
+    def update_student(self, student_id, user_id, student_data):
         """
         Update an existing student record (using database task id)
         """
         try:
-            deadline = Deadline.query.filter_by(id=deadline_id, professor_id=user_id).first()
-            if not deadline:
-                return None, "Folder not found"
-            
             # student_id here is the primary key (UUID)
-            student = Student.query.filter_by(id=student_id, deadline_id=deadline_id).first()
+            student = Student.query.filter_by(id=student_id, professor_id=user_id).first()
             if not student:
                 return None, "Student record not found"
-            
-            if 'student_id' in student_data:
-                new_sid = student_data['student_id']
-                if new_sid != student.student_id:
-                    conflict = Student.query.filter_by(student_id=new_sid, deadline_id=deadline_id).first()
-                    if conflict:
-                        return None, f"Student with ID {new_sid} already exists."
-                student.student_id = new_sid
+
+            new_sid = self._normalize_text(student_data.get('student_id', student.student_id))
+            new_first = self._normalize_text(student_data.get('first_name', student.first_name))
+            new_last = self._normalize_text(student_data.get('last_name', student.last_name))
+            new_email = self._normalize_lower(student_data.get('email', student.email))
+
+            uniqueness_error = self._validate_student_uniqueness(
+                user_id=user_id,
+                student_id=new_sid,
+                first_name=new_first,
+                last_name=new_last,
+                email=new_email,
+                exclude_id=student.id
+            )
+            if uniqueness_error:
+                return None, uniqueness_error
+
+            student.student_id = new_sid
                 
             if 'last_name' in student_data:
-                student.last_name = student_data['last_name']
+                student.last_name = new_last
             if 'first_name' in student_data:
-                student.first_name = student_data['first_name']
+                student.first_name = new_first
             if 'email' in student_data:
-                student.email = student_data['email']
+                student.email = new_email
+            if 'course_year' in student_data:
+                student.course_year = student_data['course_year']
+            if 'team_code' in student_data:
+                student.team_code = student_data['team_code']
             
             db.session.commit()
             return student.to_dict(), None

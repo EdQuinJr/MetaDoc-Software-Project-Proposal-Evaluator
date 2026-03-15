@@ -27,7 +27,7 @@ from collections import Counter
 import re
 
 from app.core.extensions import db
-from app.models import Submission, AnalysisResult, DocumentSnapshot, SubmissionStatus
+from app.models import Submission, AnalysisResult, DocumentSnapshot, SubmissionStatus, Student
 from app.services.audit_service import AuditService
 from app.services import MetadataService
 from app.api.auth import get_auth_service
@@ -67,7 +67,17 @@ def analyze_submission(submission_id):
         
         # Extract metadata
         metadata, metadata_error = metadata_service.extract_docx_metadata(submission.file_path)
-        
+
+        # Ensure last editor reflects the submitting Gmail from class record when available
+        submitter_email = None
+        if submission.student_id and submission.professor_id:
+            student_row = Student.query.filter_by(
+                professor_id=submission.professor_id,
+                student_id=submission.student_id
+            ).first()
+            if student_row and student_row.email:
+                submitter_email = student_row.email.strip().lower()
+
         if metadata_error:
             submission.status = SubmissionStatus.FAILED
             submission.error_message = metadata_error
@@ -155,12 +165,7 @@ def analyze_submission(submission_id):
                 'course_code': getattr(submission.deadline, 'course_code', None) if submission.deadline else None
             }
             
-            rubric_data = None
-            if submission.deadline and hasattr(submission.deadline, 'rubric') and submission.deadline.rubric:
-                 rubric_data = submission.deadline.rubric.to_dict()
-                 current_app.logger.info(f"Rubric found for submission {submission.id}, forcing AI evaluation with criteria.")
-
-            ai_summary, ai_error = nlp_service.generate_ai_summary(text, context, rubric=rubric_data)
+            ai_summary, ai_error = nlp_service.generate_ai_summary(text, context)
             
             # Consolidate
             consolidated_results, _ = nlp_service.consolidate_nlp_results(local_results, ai_summary)

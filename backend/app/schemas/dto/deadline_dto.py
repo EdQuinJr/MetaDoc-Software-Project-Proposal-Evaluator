@@ -9,7 +9,7 @@ class DeadlineDTO:
     """DTO for Deadline model serialization"""
     
     @staticmethod
-    def serialize(deadline, include_submissions: bool = False) -> Dict[str, Any]:
+    def serialize(deadline, include_submissions: bool = False) -> Optional[Dict[str, Any]]:
         """Serialize Deadline model to dictionary"""
         if not deadline:
             return None
@@ -23,7 +23,6 @@ class DeadlineDTO:
             'course_code': deadline.course_code,
             'assignment_type': deadline.assignment_type,
             'professor_id': deadline.professor_id,
-            'rubric_id': deadline.rubric_id if hasattr(deadline, 'rubric_id') else None,
             'created_at': deadline.created_at.isoformat() if hasattr(deadline, 'created_at') else None
         }
         
@@ -40,9 +39,6 @@ class DeadlineDTO:
                     'late': late
                 }
         
-        if hasattr(deadline, 'rubric') and deadline.rubric:
-            data['rubric'] = deadline.rubric.to_dict()
-            
         return data
     
     @staticmethod
@@ -55,7 +51,7 @@ class DeadlineListDTO:
     """DTO for deadline list view with minimal data"""
     
     @staticmethod
-    def serialize(deadline) -> Dict[str, Any]:
+    def serialize(deadline) -> Optional[Dict[str, Any]]:
         """Serialize deadline for list view"""
         if not deadline:
             return None
@@ -63,6 +59,7 @@ class DeadlineListDTO:
         data = {
             'id': deadline.id,
             'title': deadline.title,
+            'description': deadline.description,
             'deadline_datetime': deadline.deadline_datetime.isoformat() if deadline.deadline_datetime else None,
             'timezone': deadline.timezone,
             'course_code': deadline.course_code,

@@ -349,6 +349,21 @@
   transform: translateY(0);
 }
 
+.university-footer-with-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.university-footer-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
+}
+
 .premium-button {
   background: linear-gradient(135deg, var(--color-maroon) 0%, var(--color-maroon-dark) 100%) !important;
   color: white !important;

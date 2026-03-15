@@ -17,9 +17,12 @@ import {
   Folder as FolderIcon,
   ArrowLeft,
   Download,
-  Archive
+  Archive,
+  Edit2,
+  Plus,
+  CheckCircle
 } from 'lucide-react';
-import '../styles/Folder.css';
+import '../styles/Deliverable.css';
 
 const formatStudentId = (input) => {
   if (!input) return 'N/A';
@@ -38,20 +41,24 @@ const formatStudentId = (input) => {
   return result || input;
 };
 
-const Folder = () => {
+const Deliverable = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Restore files view immediately when navigating back from a submission detail
+  const initialDeadlineData = location.state?.selectedDeadlineData || null;
+
   // View State: 'folders' | 'files'
-  const [viewMode, setViewMode] = useState('folders');
+  const [viewMode, setViewMode] = useState(initialDeadlineData ? 'files' : 'folders');
 
   // Data State
   const [deadlines, setDeadlines] = useState([]);
   const [submissions, setSubmissions] = useState([]);
-  const [selectedDeadline, setSelectedDeadline] = useState(null);
+  const [students, setStudents] = useState([]);
+  const [selectedDeadline, setSelectedDeadline] = useState(initialDeadlineData);
 
   // Loading State
-  const [loading, setLoading] = useState(false); // General loading for submissions
+  const [loading, setLoading] = useState(!!initialDeadlineData); // Start as loading when restoring files view to prevent empty-state flash
   const [deadlinesLoading, setDeadlinesLoading] = useState(true);
 
   // Filter/Sort State
@@ -62,7 +69,8 @@ const Folder = () => {
     per_page: 20,
     total: 0,
   });
-  const [sortOption, setSortOption] = useState('newest'); // 'newest', 'oldest', 'a_z'
+  const [sortOption, setSortOption] = useState('none'); // 'none', 'newest', 'oldest', 'a_z'
+  const [teamCodeFilter, setTeamCodeFilter] = useState('none');
 
   // Modal State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -72,29 +80,61 @@ const Folder = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteType, setDeleteType] = useState('submission'); // 'submission' | 'folder'
 
+  // Folder Management State
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [editingFolder, setEditingFolder] = useState(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [folderFormData, setFolderFormData] = useState({
+    title: '',
+    description: '',
+    deadline_datetime: '',
+  });
+  const [folderFormError, setFolderFormError] = useState(null);
+
+  // Description Modal State
+  const [showDescriptionModal, setShowDescriptionModal] = useState(false);
+  const [selectedDescription, setSelectedDescription] = useState({ title: '', content: '' });
+
+  const teamCodeOptions = [...new Set(
+    students
+      .map((student) => String(student.team_code || '').trim())
+      .filter(Boolean)
+  )].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+
   // Initial Fetch
   useEffect(() => {
     fetchDeadlines();
+    fetchStudents();
   }, []);
 
-  // Handle deep link from Dashboard
+  // Handle deep link from Dashboard (deadlineId only, no full object)
   useEffect(() => {
     if (location.state?.deadlineId && deadlines.length > 0) {
-      const targetDeadline = deadlines.find(d => d.id === location.state.deadlineId);
+      const targetDeadline = deadlines.find(
+        d => d.id === location.state.deadlineId || String(d.id) === String(location.state.deadlineId)
+      );
       if (targetDeadline) {
         handleFolderClick(targetDeadline);
-        // Clear state to prevent loop when going back to folders
+        // Clear state to prevent loop when going back to deliverables
         navigate(location.pathname, { replace: true, state: {} });
       }
     }
   }, [deadlines, location.state, navigate, location.pathname]);
+
+  // When coming back from SubmissionDetail, selectedDeadlineData was already consumed
+  // by the useState initializer above — clear it from route state to prevent stale nav
+  useEffect(() => {
+    if (location.state?.selectedDeadlineData) {
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch submissions when view mode changes to files or pagination changes
   useEffect(() => {
     if (viewMode === 'files' && selectedDeadline) {
       fetchSubmissions();
     }
-  }, [viewMode, pagination.page, selectedDeadline, sortOption]);
+  }, [viewMode, pagination.page, selectedDeadline, sortOption, teamCodeFilter]);
 
   const fetchDeadlines = async () => {
     try {
@@ -116,10 +156,14 @@ const Folder = () => {
 
     try {
       setLoading(true);
-      let sortBy = 'created_at';
-      let sortOrder = 'desc';
+      let sortBy = null;
+      let sortOrder = null;
 
-      if (sortOption === 'oldest') {
+      if (sortOption === 'newest') {
+        sortBy = 'created_at';
+        sortOrder = 'desc';
+      } else if (sortOption === 'oldest') {
+        sortBy = 'created_at';
         sortOrder = 'asc';
       } else if (sortOption === 'a_z') {
         sortBy = 'filename';
@@ -129,13 +173,20 @@ const Folder = () => {
       const params = {
         page: pagination.page,
         per_page: pagination.per_page,
-        deadline_id: selectedDeadline.id,
-        sort_by: sortBy,
-        sort_order: sortOrder
+        deadline_id: selectedDeadline.id
       };
+
+      if (sortBy && sortOrder) {
+        params.sort_by = sortBy;
+        params.sort_order = sortOrder;
+      }
 
       if (searchTerm) {
         params.student_id = searchTerm;
+      }
+
+      if (teamCodeFilter !== 'none') {
+        params.team_code = teamCodeFilter;
       }
 
       const [response] = await Promise.all([
@@ -155,6 +206,79 @@ const Folder = () => {
     }
   };
 
+  const fetchStudents = async () => {
+    try {
+      const response = await dashboardAPI.getDeadlineStudents();
+      setStudents(response.data.students || []);
+    } catch (err) {
+      console.error('Failed to fetch class record students:', err);
+      setStudents([]);
+    }
+  };
+
+  const handleNewFolder = () => {
+    setEditingFolder(null);
+    setFolderFormData({ title: '', description: '', deadline_datetime: '' });
+    setFolderFormError(null);
+    setShowFolderModal(true);
+  };
+
+  const handleEditFolder = (folder) => {
+    setEditingFolder(folder);
+
+    const dt = new Date(folder.deadline_datetime);
+    const year = dt.getFullYear();
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    const hours = String(dt.getHours()).padStart(2, '0');
+    const minutes = String(dt.getMinutes()).padStart(2, '0');
+    const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+    setFolderFormData({
+      title: folder.title,
+      description: folder.description || '',
+      deadline_datetime: formattedDateTime,
+    });
+    setFolderFormError(null);
+    setShowFolderModal(true);
+  };
+
+  const handleFolderSubmit = async (e) => {
+    e.preventDefault();
+    setFolderFormError(null);
+
+    const selectedDate = new Date(folderFormData.deadline_datetime);
+    const now = new Date();
+
+    if (selectedDate <= now) {
+      setFolderFormError('Deadline cannot be set to a past date or current time. Please select a future date and time.');
+      return;
+    }
+
+    const payload = {
+      ...folderFormData,
+    };
+
+    try {
+      if (editingFolder) {
+        await dashboardAPI.updateDeadline(editingFolder.id, payload);
+      } else {
+        await dashboardAPI.createDeadline(payload);
+        setShowSuccessModal(true);
+      }
+
+      setShowFolderModal(false);
+      setFolderFormData({ title: '', description: '', deadline_datetime: '' });
+      setEditingFolder(null);
+      setFolderFormError(null);
+      fetchDeadlines();
+    } catch (err) {
+      console.error('Failed to save folder:', err);
+      const errorMessage = err.response?.data?.error || 'Failed to save folder. Please try again.';
+      setFolderFormError(errorMessage);
+    }
+  };
+
   // --- ACTIONS ---
 
   const handleFolderClick = (deadline) => {
@@ -162,12 +286,14 @@ const Folder = () => {
     setViewMode('files');
     setPagination({ ...pagination, page: 1 }); // Reset pagination
     setSearchTerm(''); // Reset search
+    setTeamCodeFilter('none');
   };
 
   const handleBackToFolders = () => {
     setViewMode('folders');
     setSelectedDeadline(null);
     setSubmissions([]); // Clear submissions
+    setTeamCodeFilter('none');
   };
 
   const handleSearch = (e) => {
@@ -322,11 +448,20 @@ const Folder = () => {
 
     return (
       <div className="folders-section">
-        <div className="submissions-header">
+        <div className="submissions-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-xl)' }}>
           <div>
-            <h1>Submissions Folders</h1>
-            <p>Select a deadline folder to view student submissions</p>
+            <h1>Deliverable Management</h1>
+            <p>Select a Folder to view student submissions</p>
           </div>
+          <button
+            type="button"
+            className="btn btn-primary btn-add-deliverable"
+            aria-label="Create new deliverable"
+            title="Create new deliverable"
+            onClick={handleNewFolder}
+          >
+            <Plus size={22} />
+          </button>
         </div>
 
         <div className="submissions-filters">
@@ -336,7 +471,7 @@ const Folder = () => {
               <input
                 type="text"
                 className="search-input"
-                placeholder="Search folders..."
+                placeholder="Search deliverables..."
                 value={folderSearchTerm}
                 onChange={(e) => setFolderSearchTerm(e.target.value)}
               />
@@ -347,13 +482,13 @@ const Folder = () => {
         {deadlinesLoading ? (
           <div className="loading-state">
             <div className="spinner"></div>
-            <p>Loading folders...</p>
+            <p>Loading deliverables...</p>
           </div>
         ) : filteredDeadlines.length === 0 ? (
           <div className="empty-state">
             <FolderIcon size={64} />
-            <h3>{folderSearchTerm ? 'No folders match your search' : 'No Folders Created'}</h3>
-            <p>{folderSearchTerm ? 'Try a different search term' : 'Create a deadline in "Deadlines" to generate a folder.'}</p>
+            <h3>{folderSearchTerm ? 'No deliverables match your search' : 'No Deliverables Created'}</h3>
+            <p>{folderSearchTerm ? 'Try a different search term' : 'Create a deadline in "Deadlines" to generate a deliverable.'}</p>
           </div>
         ) : (
           <div className="folders-grid">
@@ -366,34 +501,84 @@ const Folder = () => {
                   className="folder-card"
                   onClick={() => handleFolderClick(deadline)}
                 >
-                  <div className="folder-header">
-                    <div className="folder-icon-wrapper">
-                      <FolderIcon size={24} fill="currentColor" fillOpacity={0.2} />
+                  <div className="folder-card-inner">
+                    <div className="folder-header">
+                      <div className="folder-title-group">
+                        <h3 className="folder-title" title={deadline.title}>{deadline.title}</h3>
+                        <div className="folder-meta">
+                          <Calendar size={14} />
+                          <span>Due: {new Date(deadline.deadline_datetime).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      <div className="folder-actions flex gap-1">
+                      <button
+                        className="btn-edit-folder"
+                        title="Edit Deliverable"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditFolder(deadline);
+                        }}
+                      >
+                        <Edit2 size={18} />
+                      </button>
+                      <button
+                        className="btn-edit-folder"
+                        title="Delete Deliverable"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget({ id: deadline.id, filename: deadline.title });
+                          setDeleteType('folder');
+                          setShowDeleteModal(true);
+                        }}
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
-                    <button
-                      className="btn-delete-folder"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget({ id: deadline.id, filename: deadline.title }); // reusing filename for title in modal
-                        setDeleteType('folder');
-                        setShowDeleteModal(true);
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
                   </div>
-                  <h3 className="folder-title">{deadline.title}</h3>
-                  <div className="folder-meta">
-                    <Calendar size={14} />
-                    <span>Due: {new Date(deadline.deadline_datetime).toLocaleDateString()}</span>
-                  </div>
-                  <div className="folder-stats">
-                    <span className="stat-badge">
-                      {deadline.submission_count || 0} Files
-                    </span>
-                    <span className={`stat-badge ${isPast ? 'status-closed' : 'status-active'}`}>
-                      {isPast ? 'Closed' : 'Active'}
-                    </span>
+                    <div className="folder-card-body">
+                      {deadline.description ? (
+                        <div className="folder-description-container">
+                          <p className="folder-description">
+                            {deadline.description}
+                          </p>
+                          {deadline.description.length > 50 && (
+                            <button
+                              className="btn-see-more"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedDescription({ title: deadline.title, content: deadline.description });
+                                setShowDescriptionModal(true);
+                              }}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#be123c',
+                                padding: '4px 0',
+                                fontSize: '0.8rem',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                textDecoration: 'none',
+                                display: 'inline-block'
+                              }}
+                            >
+                              See More
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="folder-description" style={{ fontStyle: 'italic', color: 'var(--color-gray-500)' }}>
+                          No description provided.
+                        </p>
+                      )}
+                    </div>
+                    <div className="folder-card-footer">
+                      <span className="stat-badge">
+                        {deadline.submission_count || 0} Files
+                      </span>
+                      <span className={`stat-badge ${isPast ? 'status-closed' : 'status-active'}`}>
+                        {isPast ? 'Closed' : 'Active'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               );
@@ -410,23 +595,47 @@ const Folder = () => {
       <div className="files-view-header">
         <button className="btn-back" onClick={handleBackToFolders}>
           <ArrowLeft size={18} />
-          Back to Folders
+          Back to Deliverables
         </button>
         <div className="folder-info">
           <h2>{selectedDeadline?.title}</h2>
           <p>
             Due: {new Date(selectedDeadline?.deadline_datetime).toLocaleString()}
-            {selectedDeadline?.description && ` • ${selectedDeadline.description}`}
+            {selectedDeadline?.description && (
+              <>
+                <br />
+                <span className="text-gray-600 line-clamp-1">
+                  {selectedDeadline.description.length > 100 
+                    ? selectedDeadline.description.substring(0, 100) + '...'
+                    : selectedDeadline.description}
+                </span>
+                {selectedDeadline.description.length > 100 && (
+                  <button
+                    className="btn-see-more"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedDescription({ title: selectedDeadline.title, content: selectedDeadline.description });
+                      setShowDescriptionModal(true);
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#be123c',
+                      padding: '0 4px',
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      textDecoration: 'none',
+                      display: 'inline-block'
+                    }}
+                  >
+                    See More
+                  </button>
+                )}
+              </>
+            )}
           </p>
         </div>
-        <button className="btn btn-outline btn-sm ml-auto mr-2" onClick={handleExportCSV}>
-          <Download size={16} className="mr-2" />
-          Export Overview
-        </button>
-        <button className="btn btn-primary btn-sm" onClick={handleDownloadZip}>
-          <Archive size={16} className="mr-2" />
-          Download All Files
-        </button>
       </div>
 
       {/* Filter / Search */}
@@ -445,6 +654,19 @@ const Folder = () => {
         </form>
         <div className="filter-group">
           <select
+            className="filter-select team-code-filter-select"
+            value={teamCodeFilter}
+            onChange={(e) => {
+              setTeamCodeFilter(e.target.value);
+              setPagination({ ...pagination, page: 1 });
+            }}
+          >
+            <option value="none">Select Code</option>
+            {teamCodeOptions.map((teamCode) => (
+              <option key={teamCode} value={teamCode}>{teamCode}</option>
+            ))}
+          </select>
+          <select
             className="filter-select"
             value={sortOption}
             onChange={(e) => {
@@ -452,6 +674,7 @@ const Folder = () => {
               setPagination({ ...pagination, page: 1 });
             }}
           >
+            <option value="none">NONE</option>
             <option value="newest">Newest Date</option>
             <option value="oldest">Oldest Date</option>
             <option value="a_z">Name (A-Z)</option>
@@ -479,10 +702,12 @@ const Folder = () => {
                 <tr>
                   <th>File Name</th>
                   <th>Student ID</th>
+                  <th>Student Name</th>
                   <th>Date Submitted</th>
+                  <th>Last Modified</th>
+                  <th>Course & Year</th>
+                  <th>Team Code</th>
                   <th>Status</th>
-                  <th>Type</th>
-                  <th>Words</th>
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
@@ -493,7 +718,12 @@ const Folder = () => {
                   return (
                     <tr
                       key={submission.id}
-                      onClick={() => navigate(`/dashboard/submissions/${submission.id}`)}
+                      onClick={() => navigate(`/dashboard/submissions/${submission.id}`, {
+                        state: {
+                          from: '/dashboard/deliverables',
+                          fromState: selectedDeadline ? { deadlineId: selectedDeadline.id, selectedDeadlineData: selectedDeadline } : {},
+                        },
+                      })}
                       className="clickable-row"
                     >
                       <td>
@@ -515,6 +745,7 @@ const Folder = () => {
                           {formatStudentId(submission.student_id)}
                         </span>
                       </td>
+                      <td>{submission.student_name || '-'}</td>
                       <td>
                         <div className="date-cell">
                           <Calendar size={14} className="icon-subtle" />
@@ -525,6 +756,21 @@ const Folder = () => {
                         </div>
                       </td>
                       <td>
+                        {submission.last_modified ? (
+                          <div className="date-cell">
+                            <Calendar size={14} className="icon-subtle" />
+                            {new Date(submission.last_modified).toLocaleDateString()}
+                            <span className="time-subtle">
+                              {new Date(submission.last_modified).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td>{submission.course_year || '-'}</td>
+                      <td>{submission.team_code || '-'}</td>
+                      <td>
                         {timeliness && (
                           <div className={`status-pill ${timeliness.isLate ? 'status-late' : 'status-ontime'}`}>
                             {timeliness.isLate ? <AlertTriangle size={12} /> : <Clock size={12} />}
@@ -533,27 +779,18 @@ const Folder = () => {
                         )}
                       </td>
                       <td>
-                        <div className="type-cell">
-                          {submission.submission_type === 'drive_link' ? (
-                            <><LinkIcon size={14} /> Drive Link</>
-                          ) : (
-                            <><FileText size={14} /> File Upload</>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <span className="word-count">
-                          {submission.analysis_summary?.word_count || '-'}
-                        </span>
-                      </td>
-                      <td>
                         <div className="actions-cell">
                           <button
                             className="btn-icon btn-view"
                             title="View Details"
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/dashboard/submissions/${submission.id}`);
+                              navigate(`/dashboard/submissions/${submission.id}`, {
+                                state: {
+                                  from: '/dashboard/deliverables',
+                                  fromState: selectedDeadline ? { deadlineId: selectedDeadline.id, selectedDeadlineData: selectedDeadline } : {},
+                                },
+                              });
                             }}
                           >
                             <ChevronRight size={18} />
@@ -717,7 +954,12 @@ const Folder = () => {
             <div className="modal-footer-full">
               <button className="btn btn-primary btn-block" onClick={() => {
                 setShowPreviewModal(false);
-                navigate(`/dashboard/submissions/${previewSubmission?.id}`);
+                navigate(`/dashboard/submissions/${previewSubmission?.id}`, {
+                  state: {
+                    from: '/dashboard/deliverables',
+                    fromState: selectedDeadline ? { deadlineId: selectedDeadline.id, selectedDeadlineData: selectedDeadline } : {},
+                  },
+                });
               }}>
                 View Full Details
               </button>
@@ -732,12 +974,12 @@ const Folder = () => {
           <div className="modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div className="delete-icon"><AlertTriangle size={20} /></div>
-              <h2>Delete {deleteType === 'folder' ? 'Folder' : 'File'}</h2>
+              <h2>Delete {deleteType === 'folder' ? 'Deliverable' : 'File'}</h2>
             </div>
             <div className="modal-body">
               <p>Permanently delete <strong>"{deleteTarget.filename}"</strong>?</p>
               {deleteType === 'folder' && (
-                <p className="warning-text">This will delete all submissions inside this folder!</p>
+                <p className="warning-text">This will delete all submissions inside this deliverable!</p>
               )}
             </div>
             <div className="modal-footer">
@@ -747,8 +989,122 @@ const Folder = () => {
           </div>
         </div>
       )}
+
+      {/* Folder Modal */}
+      {showFolderModal && (
+        <div className="modal-overlay" onClick={() => setShowFolderModal(false)}>
+          <div className="modal-content folder-form-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header folder-form-header">
+              <h2 className="folder-form-title">{editingFolder ? 'Edit Deliverable' : 'Create New Deliverable'}</h2>
+              <button type="button" className="btn-close folder-form-close" aria-label="Close deliverable form" onClick={() => setShowFolderModal(false)}>
+                <X size={20} className="icon-close" />
+              </button>
+            </div>
+
+            <form onSubmit={handleFolderSubmit}>
+              {folderFormError && (
+                <div className="alert alert-error">
+                  <AlertTriangle size={20} />
+                  <span>{folderFormError}</span>
+                </div>
+              )}
+
+              <div className="form-group folder-form-group">
+                <label className="folder-form-label" htmlFor="title">TITLE *</label>
+                <input
+                  type="text"
+                  id="title"
+                  className="form-control"
+                  value={folderFormData.title}
+                  onChange={(e) => setFolderFormData({ ...folderFormData, title: e.target.value })}
+                  required
+                  placeholder="e.g., Final Project Submission"
+                />
+              </div>
+
+              <div className="form-group folder-form-group">
+                <label className="folder-form-label" htmlFor="description">DESCRIPTION (OPTIONAL)</label>
+                <textarea
+                  id="description"
+                  className="form-control"
+                  rows="3"
+                  value={folderFormData.description}
+                  onChange={(e) => setFolderFormData({ ...folderFormData, description: e.target.value })}
+                  placeholder="Optional description or instructions"
+                />
+              </div>
+
+              <div className="form-group folder-form-group">
+                <label className="folder-form-label" htmlFor="deadline_datetime">DEADLINE DATE & TIME *</label>
+                <input
+                  type="datetime-local"
+                  id="deadline_datetime"
+                  className="form-control"
+                  value={folderFormData.deadline_datetime}
+                  onChange={(e) => setFolderFormData({ ...folderFormData, deadline_datetime: e.target.value })}
+                  min={new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+                  required
+                />
+                <small className="form-text">Select a future date and time</small>
+              </div>
+
+              <div className="folder-form-footer">
+                <button type="submit" className="btn btn-folder-create">
+                  {editingFolder ? 'Update Deliverable' : 'Create Deliverable'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Description Modal */}
+      {showDescriptionModal && (
+        <div className="modal-overlay" onClick={() => setShowDescriptionModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '600px', width: '90%' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 style={{ fontSize: '1.25rem', color: '#800020', margin: 0 }}>{selectedDescription.title}</h2>
+              <button className="btn-close" onClick={() => setShowDescriptionModal(false)}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto', padding: '1.5rem' }}>
+              <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', color: '#374151', fontSize: '0.95rem', margin: 0 }}>
+                {selectedDescription.content}
+              </p>
+            </div>
+            <div className="modal-footer" style={{ borderTop: '1px solid #e5e7eb', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-primary" onClick={() => setShowDescriptionModal(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="modal-overlay" onClick={() => setShowSuccessModal(false)}>
+          <div className="modal-content success-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="success-icon">
+                <CheckCircle size={24} />
+              </div>
+              <h2>Success!</h2>
+            </div>
+            <div className="modal-body">
+              <p>Deliverable has been successfully created.</p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-primary" onClick={() => setShowSuccessModal(false)}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default Folder;
+export default Deliverable;

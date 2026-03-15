@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { dashboardAPI, authAPI } from '../services/api';
 import {
   FileText,
@@ -39,6 +39,7 @@ const formatStudentId = (input) => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -89,8 +90,8 @@ const Dashboard = () => {
   const generateToken = async () => {
     if (deadlines.length === 0) {
       setErrorMessage({
-        title: 'No Deadline Found',
-        body: 'You need to create a deadline first before generating a submission link. Deadlines help track and organize student submissions effectively.'
+        title: 'No Deliverable Found',
+        body: 'You need to create a deliverable first before generating a submission link. Deliverables help track and organize student submissions effectively.'
       });
       setShowErrorModal(true);
       return;
@@ -98,8 +99,8 @@ const Dashboard = () => {
 
     if (!selectedDeadline) {
       setErrorMessage({
-        title: 'No Deadline Selected',
-        body: 'Please select a deadline from the dropdown before generating a submission link. This helps students know which deadline their submission is for.'
+        title: 'No Deliverable Selected',
+        body: 'Please select a deliverable from the dropdown before generating a submission link. This helps students know which deliverable their submission is for.'
       });
       setShowErrorModal(true);
       return;
@@ -153,6 +154,20 @@ const Dashboard = () => {
 
   const resultColumns = [
     {
+      header: 'Deliverable',
+      key: 'deliverable',
+      render: (submission) => (
+        <div className="file-info-cell">
+          <div className="file-icon-mini">
+            <Calendar size={18} />
+          </div>
+          <span className="file-name" title={submission.deliverable || 'Untitled Deliverable'}>
+            {submission.deliverable || 'Untitled Deliverable'}
+          </span>
+        </div>
+      )
+    },
+    {
       header: 'File Name',
       key: 'filename',
       render: (submission) => (
@@ -160,11 +175,16 @@ const Dashboard = () => {
           <div className="file-icon-mini">
             <FileText size={18} />
           </div>
-          <span className="file-name" title={submission.original_filename}>
-            {submission.original_filename}
+          <span className="file-name" title={submission.file_name || submission.original_filename}>
+            {submission.file_name || submission.original_filename || 'Untitled file'}
           </span>
         </div>
       )
+    },
+    {
+      header: 'Team Code',
+      key: 'team_code',
+      render: (submission) => submission.team_code || '-'
     },
     {
       header: 'Student ID',
@@ -201,7 +221,7 @@ const Dashboard = () => {
 
   const deadlineColumns = [
     {
-      header: 'Deadline Title',
+      header: 'Deliverable Title',
       key: 'title',
       render: (deadline) => (
         <div className="file-info-cell">
@@ -251,14 +271,14 @@ const Dashboard = () => {
 
   const stats = [
     {
-      label: 'Total SPPs',
+      label: 'Total Files',
       value: overview?.total_submissions || 0,
       icon: FileText,
       color: 'maroon',
       change: null,
     },
     {
-      label: 'Active Deadlines',
+      label: 'Active Deliverables',
       value: overview?.active_deadlines || 0,
       icon: Calendar,
       color: 'info',
@@ -266,17 +286,17 @@ const Dashboard = () => {
     },
   ];
 
-  const modalFooter = errorMessage.title === 'No Deadline Found' ? (
+  const modalFooter = errorMessage.title === 'No Deliverable Found' ? (
     <button
       type="button"
       className="btn btn-primary"
       onClick={() => {
         setShowErrorModal(false);
-        navigate('/dashboard/deadlines');
+        navigate('/dashboard/deliverables');
       }}
     >
       <Calendar size={18} />
-      Go to Deadline Management
+      Go to Deliverables
     </button>
   ) : (
     <button
@@ -314,7 +334,7 @@ const Dashboard = () => {
             }}
             className="compact-select"
           >
-            <option value="">No Deadline</option>
+            <option value="">No Deliverable</option>
             {deadlines.map((deadline) => (
               <option key={deadline.id} value={deadline.id}>
                 {deadline.title} - {new Date(deadline.deadline_datetime).toLocaleDateString()}
@@ -375,7 +395,7 @@ const Dashboard = () => {
 
       <div className="dashboard-section">
         <div className="section-header">
-          <h2>Recent SPP Submissions</h2>
+          <h2>Recent Submission</h2>
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => navigate('/dashboard/submissions')}
@@ -393,7 +413,12 @@ const Dashboard = () => {
               const colDef = resultColumns.find(c => c.key === column.key);
               return colDef ? colDef.render(item) : null;
             }}
-            onRowClick={(item) => navigate(`/dashboard/submissions/${item.id}`)}
+            onRowClick={(item) => navigate(`/dashboard/submissions/${item.id}`, {
+              state: {
+                from: location.pathname,
+                fromState: location.state || {},
+              },
+            })}
             emptyMessage="No SPP submissions yet"
           />
         </Card>
@@ -401,10 +426,10 @@ const Dashboard = () => {
 
       <div className="dashboard-section">
         <div className="section-header">
-          <h2>Upcoming Deadlines</h2>
+          <h2>Upcoming Deliverable Deadlines</h2>
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => navigate('/dashboard/deadlines')}
+            onClick={() => navigate('/dashboard/deliverables')}
           >
             Manage
             <ArrowRight size={16} />
@@ -419,8 +444,8 @@ const Dashboard = () => {
               const colDef = deadlineColumns.find(c => c.key === column.key);
               return colDef ? colDef.render(item) : null;
             }}
-            onRowClick={(item) => navigate('/dashboard/submissions', { state: { deadlineId: item.id } })}
-            emptyMessage="No upcoming deadlines"
+            onRowClick={(item) => navigate('/dashboard/deliverables', { state: { deadlineId: item.id } })}
+            emptyMessage="No upcoming deliverables"
           />
         </Card>
       </div>

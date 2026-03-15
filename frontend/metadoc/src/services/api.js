@@ -31,10 +31,18 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Unauthorized - clear token and redirect to login
+      // Unauthorized - clear token and redirect based on active auth flow
+      const storedUserType = localStorage.getItem('user_type');
+      const redirectAfterAuth = localStorage.getItem('redirect_after_auth') || '';
+      const isStudentFlow =
+        storedUserType === 'student' ||
+        window.location.pathname.startsWith('/student') ||
+        redirectAfterAuth === '/student/login' ||
+        redirectAfterAuth.startsWith('/submit');
+
       localStorage.removeItem('session_token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      window.location.href = isStudentFlow ? '/student/login' : '/login';
     }
     return Promise.reject(error);
   }
@@ -79,11 +87,11 @@ export const dashboardAPI = {
   deleteDeadline: (deadlineId) => api.delete(`/dashboard/deadlines/${deadlineId}`),
   getSubmissionFile: (submissionId) => api.get(`/dashboard/submissions/${submissionId}/download`, { responseType: 'blob' }),
   downloadDeadlineFiles: (deadlineId) => api.get(`/dashboard/deadlines/${deadlineId}/download-all`, { responseType: 'blob' }),
-  getDeadlineStudents: (deadlineId) => api.get(`/dashboard/deadlines/${deadlineId}/students`),
-  importDeadlineStudents: (deadlineId, students) => api.post(`/dashboard/deadlines/${deadlineId}/import-students`, { students }),
-  deleteDeadlineStudent: (deadlineId, studentId) => api.delete(`/dashboard/deadlines/${deadlineId}/students/${studentId}`),
-  addDeadlineStudent: (deadlineId, data) => api.post(`/dashboard/deadlines/${deadlineId}/students/add`, data),
-  updateDeadlineStudent: (deadlineId, studentId, data) => api.put(`/dashboard/deadlines/${deadlineId}/students/${studentId}`, data),
+  getDeadlineStudents: () => api.get('/dashboard/students'),
+  importDeadlineStudents: (students) => api.post('/dashboard/students/import', { students }),
+  deleteDeadlineStudent: (studentId) => api.delete(`/dashboard/students/${studentId}`),
+  addDeadlineStudent: (data) => api.post('/dashboard/students/add', data),
+  updateDeadlineStudent: (studentId, data) => api.put(`/dashboard/students/${studentId}`, data),
   getContributionReport: (submissionId) => api.get(`/dashboard/submissions/${submissionId}/contribution-report`),
 };
 
@@ -115,15 +123,6 @@ export const reportsAPI = {
   exportCSV: (data) => api.post('/reports/export/csv', data),
   downloadExport: (exportId) => api.get(`/reports/download/${exportId}`, { responseType: 'blob' }),
   getExports: () => api.get('/reports/exports'),
-};
-
-// Rubric API
-export const rubricAPI = {
-  getRubrics: () => api.get('/rubrics/'),
-  createRubric: (data) => api.post('/rubrics/', data),
-  getRubric: (rubricId) => api.get(`/rubrics/${rubricId}`),
-  updateRubric: (rubricId, data) => api.put(`/rubrics/${rubricId}`, data),
-  deleteRubric: (rubricId) => api.delete(`/rubrics/${rubricId}`),
 };
 
 export default api;

@@ -300,8 +300,8 @@ class NLPService:
             'note': 'Basic English detection'
         }
     
-    def generate_ai_summary(self, text, submission_context=None, rubric=None):
-        """Generate AI-powered summary and insights using Gemini, optionally guided by a rubric"""
+    def generate_ai_summary(self, text, submission_context=None):
+        """Generate AI-powered summary and insights using Gemini"""
         if not self.gemini_initialized:
             self._initialize_gemini()
         
@@ -316,39 +316,13 @@ class NLPService:
             if submission_context:
                 user_prompt = f"Assignment Type: {submission_context.get('assignment_type', 'Unknown')}\n" + user_prompt
             
-            if rubric:
-                system_instruction += "Evaluate the document based strictly on the provided rubric criteria. "
-                system_instruction += "For EACH criterion, provide a rating of 'Low', 'Medium', or 'High' based on how well the document satisfies the requirements. "
-                system_instruction += "If the document content does not comply with the rubric guide or is missing relevant content, rate it 'Low'. "
-                system_instruction += "Also provide a brief justification for each rating (this will be stored but not always shown)."
-                
-                rubric_text = "\n\nRUBRIC CRITERIA:\n"
-                for criteria in rubric.get('criteria', []):
-                    rubric_text += f"- {criteria.get('name')}: {criteria.get('description')}\n"
-                
-                user_prompt += rubric_text
-                user_prompt += "\n\nOUTPUT FORMAT (Strict JSON):\n"
-                user_prompt += '{\n"summary": "Concise summary...",\n"rubric_evaluation": [\n  {"criteria": "Name", "rating": "High", "feedback": "..."}\n],\n"overall_feedback": "..."\n}'
-            else:
-                 user_prompt += "\n\nProvide a concise summary and key insights."
+            user_prompt += "\n\nProvide a concise summary and key insights."
 
             model = genai.GenerativeModel('gemini-2.0-flash')
             response = model.generate_content(system_instruction + "\n\n" + user_prompt)
             
             if response.text:
-                # If rubric was used, try to parse JSON
-                if rubric:
-                    try:
-                        import json
-                        # Clean markdown code blocks if present
-                        clean_text = response.text.replace('```json', '').replace('```', '').strip()
-                        return json.loads(clean_text), None
-                    except Exception as parse_err:
-                        current_app.logger.warning(f"Failed to parse Gemini JSON: {parse_err}")
-                        # Fallback to text
-                        return {'summary': response.text, 'raw_response': response.text}, None
-                else:
-                    return {'summary': response.text}, None
+                return {'summary': response.text}, None
             else:
                 return None, "No response from Gemini"
                 

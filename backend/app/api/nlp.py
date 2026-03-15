@@ -76,13 +76,7 @@ def analyze_nlp(submission_id):
                 'course_code': getattr(submission.deadline, 'course_code', None) if submission.deadline else None
             }
             
-            # Fetch Rubric if associated with deadline
-            rubric_data = None
-            if submission.deadline and hasattr(submission.deadline, 'rubric') and submission.deadline.rubric:
-                 rubric_data = submission.deadline.rubric.to_dict()
-                 current_app.logger.info(f"Rubric found for submission {submission.id}, forcing AI evaluation with criteria.")
-            
-            ai_summary, ai_error = get_nlp_service().generate_ai_summary(text, context, rubric=rubric_data)
+            ai_summary, ai_error = get_nlp_service().generate_ai_summary(text, context)
             if ai_error:
                 current_app.logger.warning(f"AI summary failed: {ai_error}")
         

@@ -2,19 +2,26 @@ import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  FileText,
+  Folder,
   LayoutDashboard,
-  Upload,
-  Calendar,
   FileBarChart,
   LogOut,
   Menu,
   X,
   User,
   Users,
-  BookCheck,
+  XCircle,
+  Code2,
+  Globe,
+  Database,
+  ClipboardList,
 } from 'lucide-react';
 import logo from '../../assets/images/logo.png';
+import citLogo from '../../assets/images/cit_logo.png';
+import quindaoProfile from '../../assets/images/members/Quindao_Profile.jpg';
+import abellanaProfile from '../../assets/images/members/Abellana_Profile.jpg';
+import velosoProfile from '../../assets/images/members/Veloso_Profile.jpg';
+import garingProfile from '../../assets/images/members/Garing_Profile.jpg';
 import '../../styles/DashboardLayout.css';
 
 const DashboardLayout = ({ children }) => {
@@ -22,6 +29,8 @@ const DashboardLayout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showTeamModal, setShowTeamModal] = useState(false);
+  const [selectedMember, setSelectedMember] = useState(null);
 
   const handleLogout = async () => {
     await logout();
@@ -30,11 +39,40 @@ const DashboardLayout = ({ children }) => {
 
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
-    { path: '/dashboard/folders', icon: FileText, label: 'Folders' },
-    { path: '/dashboard/deadlines', icon: Calendar, label: 'Deadlines' },
+    { path: '/dashboard/deliverables', icon: Folder, label: 'Deliverable' },
     { path: '/dashboard/class-record', icon: Users, label: 'Class Record' },
-    { path: '/dashboard/rubrics', icon: BookCheck, label: 'Rubrics' },
     { path: '/dashboard/reports', icon: FileBarChart, label: 'Reports' },
+  ];
+
+  const teamMembers = [
+    {
+      name: 'Quindao',
+      role: 'Project Manager',
+      Icon: ClipboardList,
+      photo: quindaoProfile,
+      description: 'Leads planning, sprint coordination, and delivery timelines for MetaDoc. Ensures features are aligned with project goals and keeps the team on track through milestone-based execution.',
+    },
+    {
+      name: 'Abellana',
+      role: 'Project Manager',
+      Icon: ClipboardList,
+      photo: abellanaProfile,
+      description: 'Manages documentation flow, task prioritization, and team communication. Supports risk mitigation and helps maintain quality and progress visibility across all development phases.',
+    },
+    {
+      name: 'Veloso',
+      role: 'Frontend Developer',
+      Icon: Globe,
+      photo: velosoProfile,
+      description: 'Builds and refines the MetaDoc user interface, focusing on usability, consistency, and responsive behavior. Translates functional requirements into clean and intuitive UI components.',
+    },
+    {
+      name: 'Garing',
+      role: 'Full Stack Developer',
+      Icon: Code2,
+      photo: garingProfile,
+      description: 'Implements end-to-end features across frontend and backend. Handles API integration, data flow, and system behavior to ensure seamless functionality throughout the MetaDoc platform.',
+    },
   ];
 
   const isActive = (path) => {
@@ -73,6 +111,18 @@ const DashboardLayout = ({ children }) => {
               <span>{item.label}</span>
             </Link>
           ))}
+
+          <button
+            type="button"
+            className="nav-item nav-item-button"
+            onClick={() => {
+              setShowTeamModal(true);
+              setSidebarOpen(false);
+            }}
+          >
+            <Code2 size={20} />
+            <span>Team 7</span>
+          </button>
         </nav>
 
         <div className="sidebar-footer">
@@ -80,6 +130,11 @@ const DashboardLayout = ({ children }) => {
             <LogOut size={18} />
             <span>Logout</span>
           </button>
+          <div className="sidebar-version">MetaDoc V1.0</div>
+          <div className="sidebar-cit">
+            <img src={citLogo} alt="CIT University" width={20} height={20} style={{ objectFit: 'contain', opacity: 0.75 }} />
+            <span>CIT University</span>
+          </div>
         </div>
       </aside>
 
@@ -118,6 +173,80 @@ const DashboardLayout = ({ children }) => {
           className="sidebar-overlay"
           onClick={() => setSidebarOpen(false)}
         ></div>
+      )}
+
+      {showTeamModal && (
+        <div className="team-modal-overlay" onClick={() => { setShowTeamModal(false); setSelectedMember(null); }}>
+          <div className={`team-modal${selectedMember ? ' team-modal-wide' : ''}`} onClick={(e) => e.stopPropagation()}>
+            {/* Left panel */}
+            <div className="team-panel-left">
+              <div className="team-modal-header">
+                <div className="team-modal-title-wrap">
+                  <h2>Team 7</h2>
+                  <p>Core developers behind MetaDoc</p>
+                </div>
+                <button
+                  type="button"
+                  className="team-modal-close"
+                  onClick={() => { setShowTeamModal(false); setSelectedMember(null); }}
+                  aria-label="Close Team 7 modal"
+                >
+                  <XCircle size={20} />
+                </button>
+              </div>
+              <div className="team-grid">
+                {teamMembers.map((member) => (
+                  <article
+                    key={member.name}
+                    className={`team-card team-card-clickable${selectedMember?.name === member.name ? ' team-card-active' : ''}`}
+                    onClick={() => setSelectedMember(member)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === 'Enter' && setSelectedMember(member)}
+                  >
+                    {member.photo ? (
+                      <img src={member.photo} alt={member.name} className="team-card-avatar" />
+                    ) : (
+                      <div className="team-card-icon">
+                        <member.Icon size={18} />
+                      </div>
+                    )}
+                    <div className="team-card-content">
+                      <h3>{member.name}</h3>
+                      <p>{member.role}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            {/* Right panel — slides in when a member is selected */}
+            {selectedMember && (
+              <div className="team-panel-right">
+                <div className="team-panel-right-header">
+                  <h3>{selectedMember.name}</h3>
+                  <button
+                    type="button"
+                    className="team-modal-close"
+                    onClick={() => setSelectedMember(null)}
+                    aria-label="Close member details"
+                  >
+                    <XCircle size={18} />
+                  </button>
+                </div>
+                {selectedMember.photo ? (
+                  <img src={selectedMember.photo} alt={selectedMember.name} className="team-member-photo-large" />
+                ) : (
+                  <div className="team-member-icon-large">
+                    <selectedMember.Icon size={36} />
+                  </div>
+                )}
+                <p className="team-member-role-label">{selectedMember.role}</p>
+                <p className="team-member-description">{selectedMember.description}</p>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

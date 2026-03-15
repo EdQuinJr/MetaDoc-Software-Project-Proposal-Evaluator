@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FileText, Shield, BarChart3, Mail, Lock } from 'lucide-react';
 import Input from '../components/common/Input/Input';
 import Button from '../components/common/Button/Button';
+import citLogo from '../assets/images/cit_logo.png';
 import '../styles/Login.css';
 
 const Login = () => {
@@ -215,7 +216,10 @@ const Login = () => {
             </div>
 
             <div className="login-footer">
-              <p>Cebu Institute of Technology - University</p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem', color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
+                <img src={citLogo} alt="CIT University" width={22} height={22} style={{ objectFit: 'contain', display: 'block', flexShrink: 0 }} />
+                <span>Cebu Institute of Technology - University</span>
+              </div>
               <p className="text-sm">© 2025 MetaDoc. All rights reserved.</p>
             </div>
           </div>

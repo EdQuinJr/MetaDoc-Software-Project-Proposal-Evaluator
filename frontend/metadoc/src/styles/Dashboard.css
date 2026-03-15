@@ -33,6 +33,24 @@
   color: var(--color-error);
 }
 
+/* Keep recent submissions table compact so columns fit */
+.dashboard-page .dashboard-section .data-table th {
+  font-size: 0.68rem;
+  padding: 0.65rem 0.8rem;
+}
+
+.dashboard-page .dashboard-section .data-table td {
+  font-size: 0.8rem;
+  padding: 0.7rem 0.8rem;
+}
+
+.dashboard-page .dashboard-section .file-name,
+.dashboard-page .dashboard-section .student-id-pill,
+.dashboard-page .dashboard-section .date-cell,
+.dashboard-page .dashboard-section .time-subtle {
+  font-size: 0.76rem;
+}
+
 /* Spinning animation */
 @keyframes spin {
   from {

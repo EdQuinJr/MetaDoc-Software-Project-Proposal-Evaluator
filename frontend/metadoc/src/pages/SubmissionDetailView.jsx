@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { dashboardAPI } from '../services/api';
 import {
   ArrowLeft,
@@ -39,6 +39,7 @@ const formatStudentId = (input) => {
 const SubmissionDetailView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [submission, setSubmission] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -102,15 +103,28 @@ const SubmissionDetailView = () => {
       <div className="detail-error">
         <AlertCircle size={48} />
         <h3>{error || 'Submission not found'}</h3>
-        <button className="btn btn-primary" onClick={() => navigate('/dashboard/folders')}>
-          Back to Folders
+        <button className="btn btn-primary" onClick={() => navigate('/dashboard/deliverables')}>
+          Back to Deliverables
         </button>
       </div>
     );
   }
 
   const handleBack = () => {
-    navigate(-1);
+    const fromPath = location.state?.from;
+    const fromState = location.state?.fromState;
+
+    if (fromPath) {
+      navigate(fromPath, { state: fromState || {} });
+      return;
+    }
+
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/dashboard/deliverables');
   };
 
   const handleViewFile = async () => {
@@ -436,77 +450,12 @@ const SubmissionDetailView = () => {
           </Card>
         )}
 
-        {/* Evaluation Rubric Reference */}
-        {submission.deadline?.rubric && (
-          <Card title="Evaluation Rubric" className="h-full">
-            <div className="mb-4">
-              <h4 className="font-bold text-gray-800 text-lg mb-1">{submission.deadline.rubric.title}</h4>
-              <p className="text-sm text-gray-500">{submission.deadline.rubric.description}</p>
-            </div>
-
-            <div className="overflow-hidden border border-gray-200 rounded-lg">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/2">Criteria</th>
-                    <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Rating</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {submission.deadline.rubric.criteria?.map((c, idx) => {
-                    // Find matching AI evaluation
-                    const result = analysis?.ai_insights?.rubric_evaluation?.find(
-                      r => r.criteria === c.name || (r.criteria && c.name && r.criteria.toLowerCase().includes(c.name.toLowerCase()))
-                    );
-
-                    return (
-                      <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3 text-sm text-gray-900 align-top">
-                          <div className="font-medium text-gray-900">{c.name}</div>
-                          <div className="text-xs text-gray-500 mt-1 mb-2" title={c.description}>{c.description}</div>
-                          {result?.feedback && (
-                            <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded border border-gray-100 italic">
-                              "{result.feedback}"
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 align-top text-center">
-                          {result?.rating ? (
-                            <span className={`badge-rating ${result.rating.toLowerCase()}`}>
-                              {result.rating}
-                            </span>
-                          ) : (
-                            <span className="text-gray-300">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        )}
-
         {/* AI Summary and Evaluation */}
         {analysis?.ai_summary && (
           <div className="card-full-width space-y-6">
             <Card title="AI-Generated Summary">
               <p className="ai-summary">{analysis.ai_summary}</p>
             </Card>
-
-            {/* Rubric Evaluation Display */}
-            {/* Rubric Evaluation Display (Summary Only) */}
-            {analysis.ai_insights?.overall_feedback && (
-              <Card title="AI Evaluation Summary">
-                <p className="text-gray-700 italic border-l-4 border-blue-500 pl-4 py-2 bg-blue-50 rounded-r-md">
-                  "{analysis.ai_insights.overall_feedback}"
-                </p>
-              </Card>
-            )}
-
-            {/* Legacy Overall Score (Only keep if no rating system is used? Or remove entirely if user hates it?) */}
-            {/* Keeping it hidden for now based on user request to "fix the rubric" to be low/med/high */}
           </div>
         )}
 

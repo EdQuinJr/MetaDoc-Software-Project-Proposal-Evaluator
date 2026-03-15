@@ -5,6 +5,7 @@ import { FileText, Users, LogIn, CheckCircle } from 'lucide-react';
 import Card from '../components/common/Card/Card';
 import Button from '../components/common/Button/Button';
 import logoImg from '../assets/images/logo.png';
+import citLogo from '../assets/images/cit_logo.png';
 import '../styles/Login.css'; // Reuse login styles
 
 
@@ -54,6 +55,9 @@ const StudentLogin = () => {
     };
 
     if (isAuthenticated && !authLoading) {
+        // Token present: useEffect navigates to /submit immediately — render nothing to avoid any flash.
+        if (token) return null;
+
         return (
             <div className="premium-theme">
                 <header className="premium-branding">
@@ -75,15 +79,7 @@ const StudentLogin = () => {
                     </p>
 
                     <div style={{ marginTop: 'var(--spacing-xl)' }}>
-                        {token ? (
-                            <Button
-                                onClick={() => navigate(`/submit?token=${token}`)}
-                                size="large"
-                                className="w-full premium-button"
-                            >
-                                Proceed to Submission
-                            </Button>
-                        ) : studentLinks.length > 0 ? (
+                        {studentLinks.length > 0 ? (
                             <div className="authorized-links-container">
                                 <div
                                     className="submission-link-card"
@@ -116,8 +112,9 @@ const StudentLogin = () => {
                         </Button>
                     </div>
 
-                    <div className="university-footer">
-                        Cebu Institute of Technology - University
+                    <div style={{ marginTop: '2.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem', color: '#9ca3af', fontSize: '0.8rem', fontWeight: 500 }}>
+                        <img src={citLogo} alt="CIT University" width={22} height={22} style={{ objectFit: 'contain', display: 'block', flexShrink: 0 }} />
+                        <span>Cebu Institute of Technology - University</span>
                     </div>
                 </Card>
             </div>
@@ -165,8 +162,9 @@ const StudentLogin = () => {
                     </button>
                 </div>
 
-                <div className="university-footer">
-                    Cebu Institute of Technology - University
+                <div style={{ marginTop: '2.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem', color: '#9ca3af', fontSize: '0.8rem', fontWeight: 500 }}>
+                    <img src={citLogo} alt="CIT University" width={22} height={22} style={{ objectFit: 'contain', display: 'block', flexShrink: 0 }} />
+                    <span>Cebu Institute of Technology - University</span>
                 </div>
             </Card>
         </div>

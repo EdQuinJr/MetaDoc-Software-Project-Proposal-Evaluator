@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Loader, CheckCircle, XCircle } from 'lucide-react';
+import { Loader, CheckCircle, XCircle, RefreshCcw } from 'lucide-react';
 import Card from '../components/common/Card/Card';
 import '../styles/OAuthCallback.css';
 
@@ -11,7 +11,14 @@ const OAuthCallback = () => {
   const { handleOAuthCallback } = useAuth();
   const [status, setStatus] = useState('processing'); // 'processing', 'success', 'error'
   const [message, setMessage] = useState('Completing authentication...');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const processed = useRef(false);
+
+  const handleStudentRefresh = () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    setTimeout(() => navigate('/student/login'), 420);
+  };
 
   useEffect(() => {
     const processCallback = async () => {
@@ -22,19 +29,36 @@ const OAuthCallback = () => {
         // Get session token and user data from URL (sent by backend)
         const sessionToken = searchParams.get('session_token');
         const userParam = searchParams.get('user');
-        const error = searchParams.get('error');
+        const rawError = searchParams.get('error');
+        const callbackUserType = searchParams.get('user_type');
+        const storedUserType = localStorage.getItem('user_type');
+        const redirectAfterAuth = localStorage.getItem('redirect_after_auth');
+        const isStudentFlow =
+          callbackUserType === 'student' ||
+          storedUserType === 'student' ||
+          redirectAfterAuth === '/student/login' ||
+          (redirectAfterAuth || '').startsWith('/submit');
+        const fallbackLoginPath = isStudentFlow ? '/student/login' : '/login';
+
+        const error = rawError ? decodeURIComponent(rawError) : null;
 
         if (error) {
+          const isClassRecordError = /class records|excel class record|not associated with any student|class record/i.test(error);
+          const errorDelay = isStudentFlow ? 30000 : 3000;
           setStatus('error');
-          setMessage(`Authentication failed: ${error}`);
-          setTimeout(() => navigate('/login'), 3000);
+          setMessage(
+            isClassRecordError
+              ? 'This account is not listed in the class record. Please sign in again using the Gmail account registered in the class record. Or try to contact your professor to update this.'
+              : `Authentication failed: ${error}`
+          );
+          setTimeout(() => navigate(fallbackLoginPath), errorDelay);
           return;
         }
 
         if (!sessionToken || !userParam) {
           setStatus('error');
           setMessage('Invalid authentication response');
-          setTimeout(() => navigate('/login'), 3000);
+          setTimeout(() => navigate(fallbackLoginPath), isStudentFlow ? 30000 : 3000);
           return;
         }
 
@@ -66,7 +90,9 @@ const OAuthCallback = () => {
         console.error('OAuth callback error:', error);
         setStatus('error');
         setMessage('An error occurred during authentication');
-        setTimeout(() => navigate('/login'), 3000);
+        const storedUserType = localStorage.getItem('user_type');
+        const isStudent = storedUserType === 'student';
+        setTimeout(() => navigate(isStudent ? '/student/login' : '/login'), isStudent ? 30000 : 3000);
       }
     };
 
@@ -99,7 +125,15 @@ const OAuthCallback = () => {
                 <XCircle size={64} className="callback-icon error" />
                 <h2>Authentication Failed</h2>
                 <p>{message}</p>
-                <p className="redirect-text">Redirecting to login...</p>
+                <p className="redirect-text">Redirecting to sign in...</p>
+                <button
+                  type="button"
+                  className={`student-signin-btn ${isRefreshing ? 'refreshing' : ''}`}
+                  onClick={handleStudentRefresh}
+                >
+                  <RefreshCcw size={22} className="student-signin-icon" />
+                  <span>Refresh</span>
+                </button>
               </>
             )}
           </div>

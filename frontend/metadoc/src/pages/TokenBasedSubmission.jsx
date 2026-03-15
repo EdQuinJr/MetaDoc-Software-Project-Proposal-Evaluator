@@ -24,6 +24,7 @@ const TokenBasedSubmission = () => {
   const [checkingRegistration, setCheckingRegistration] = useState(false);
   const [studentInfo, setStudentInfo] = useState(null);
   const [isProfessor, setIsProfessor] = useState(false);
+  const [registrationStatusMessage, setRegistrationStatusMessage] = useState('');
 
   // Drive link form state
   const [driveData, setDriveData] = useState({
@@ -61,19 +62,33 @@ const TokenBasedSubmission = () => {
             const response = await submissionAPI.getStudentStatus(token);
             if (response.data.is_registered) {
               setIsRegistered(true);
-              const { student_id, first_name, last_name } = response.data;
+              setRegistrationStatusMessage('');
+              const { student_id, first_name, last_name, course_year, team_code, email, name } = response.data;
               setStudentInfo({
                 student_id,
-                name: `${first_name} ${last_name}`
+                name: name || `${first_name} ${last_name}`.trim(),
+                course_year: course_year || '',
+                team_code: team_code || '',
+                email: email || user?.email || ''
               });
             } else {
               setIsRegistered(false);
               if (response.data.is_professor) {
                 setIsProfessor(true);
+                setRegistrationStatusMessage('');
+              } else {
+                setRegistrationStatusMessage(response.data.message || 'Your Gmail account is not in the class record list for this submission link.');
               }
             }
           } catch (err) {
             console.error('Failed to check registration status:', err);
+            setIsRegistered(false);
+            setIsProfessor(false);
+            setRegistrationStatusMessage(
+              err.response?.data?.message ||
+              err.response?.data?.error ||
+              'Unable to verify if your Gmail account is in the class record list. Please try again.'
+            );
           } finally {
             setCheckingRegistration(false);
           }
@@ -316,7 +331,7 @@ const TokenBasedSubmission = () => {
           <h2 className="premium-card-title" style={{ color: '#dc2626' }}>Access Denied</h2>
 
           <p className="premium-card-desc" style={{ marginBottom: '1.5rem', fontWeight: 'bold', color: '#991b1b' }}>
-            Your email is not in this class
+            {registrationStatusMessage || 'Your Gmail account is not in this class record list'}
           </p>
 
           <p className="premium-card-desc" style={{ fontSize: '0.95rem' }}>
@@ -389,10 +404,12 @@ const TokenBasedSubmission = () => {
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Submitting as</p>
                   <p style={{ fontWeight: '700', color: 'var(--color-maroon-dark)', margin: '2px 0', fontSize: '1.05rem' }}>
-                    {studentInfo?.name}
+                    {studentInfo?.name || 'Student'}
                   </p>
-                  <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-600)', margin: 0 }}>ID: {studentInfo?.student_id}</p>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--color-gray-500)', margin: 0 }}>{user?.email}</p>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-600)', margin: 0 }}>Student ID: {studentInfo?.student_id || 'N/A'}</p>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-600)', margin: 0 }}>Course & Year: {studentInfo?.course_year || 'N/A'}</p>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-600)', margin: 0 }}>Team Code: {studentInfo?.team_code || 'N/A'}</p>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--color-gray-500)', margin: 0 }}>{studentInfo?.email || user?.email || ''}</p>
                 </div>
               </div>
             </div>

@@ -50,6 +50,13 @@ class MetadataService:
         }
 
         # [HELPER] Robust contributor deduplication and merging
+        def to_gmail_username(identity=None, email=None):
+            """Return Gmail username (local-part) when an email is available."""
+            candidate = (email or identity or '').strip()
+            if '@' in candidate:
+                return candidate.split('@', 1)[0].strip().lower()
+            return (identity or '').strip()
+
         def add_contributor(name, role, email=None, date=None):
             if not name: return
             
@@ -165,6 +172,66 @@ class MetadataService:
                                     add_contributor(text, 'Contributor')
                         except Exception as e:
                             current_app.logger.warning(f"Error parsing core.xml: {e}")
+
+                    # ── Revision-based author/last-editor extraction ──────────────────
+                    # Parse tracked changes from word/document.xml and word/comments.xml.
+                    # These records (w:ins, w:del, w:rPrChange, w:pPrChange, comment
+                    # elements) embed the REAL person who made each change plus an ISO
+                    # timestamp.  The earliest-dated person = most-likely original author;
+                    # the latest-dated person = true last editor.
+                    W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+                    REVISION_TAGS = {
+                        f'{{{W_NS}}}ins', f'{{{W_NS}}}del',
+                        f'{{{W_NS}}}rPrChange', f'{{{W_NS}}}pPrChange',
+                        f'{{{W_NS}}}sectPrChange', f'{{{W_NS}}}tblPrChange',
+                        f'{{{W_NS}}}trPrChange', f'{{{W_NS}}}tcPrChange',
+                        f'{{{W_NS}}}comment',
+                    }
+                    W_AUTHOR = f'{{{W_NS}}}author'
+                    W_DATE   = f'{{{W_NS}}}date'
+
+                    # author_name -> latest ISO date string seen
+                    revision_authors: dict = {}
+
+                    for xml_part in ('word/document.xml', 'word/comments.xml'):
+                        if xml_part not in zip_file.namelist():
+                            continue
+                        try:
+                            part_root = ET.fromstring(zip_file.read(xml_part))
+                            for elem in part_root.iter():
+                                if elem.tag not in REVISION_TAGS:
+                                    continue
+                                r_author = elem.get(W_AUTHOR, '').strip()
+                                r_date   = elem.get(W_DATE, '').strip()
+                                if not r_author:
+                                    continue
+                                # Keep the latest date for each author
+                                prev = revision_authors.get(r_author, '')
+                                if r_date > prev:
+                                    revision_authors[r_author] = r_date
+                        except Exception as rev_err:
+                            current_app.logger.warning(f"Revision parse error ({xml_part}): {rev_err}")
+
+                    if revision_authors:
+                        # Sort by date so we can determine earliest / latest
+                        sorted_rev = sorted(revision_authors.items(), key=lambda kv: kv[1])
+                        earliest_author, earliest_date = sorted_rev[0]
+                        latest_author,   latest_date   = sorted_rev[-1]
+
+                        # Revision tracking is more granular than core.xml — prefer it
+                        if latest_author and latest_author.lower() not in ('unavailable', 'none'):
+                            metadata['last_editor'] = latest_author
+
+                        # Use earliest revision author to fill author if still unknown
+                        if metadata['author'] in ('Unavailable', '') and earliest_author:
+                            if earliest_author.lower() not in ('unavailable', 'none'):
+                                metadata['author'] = earliest_author
+
+                        # Register every unique revision author as a contributor
+                        for rev_name, rev_date in sorted_rev:
+                            role = 'Author' if rev_name == earliest_author else 'Editor'
+                            add_contributor(rev_name, role, date=rev_date or None)
+
             except Exception as e:
                 current_app.logger.warning(f"Could not extract extended metadata: {e}")
             
@@ -185,39 +252,49 @@ class MetadataService:
             if metadata['author'] == 'Unavailable':
                 owners = external_metadata.get('owners', [])
                 if owners:
-                    metadata['author'] = owners[0].get('displayName') or owners[0].get('emailAddress') or 'Unavailable'
+                    owner_email = owners[0].get('emailAddress')
+                    owner_name = owners[0].get('displayName')
+                    metadata['author'] = to_gmail_username(owner_name, owner_email) or 'Unavailable'
             
             if metadata['last_editor'] == 'Unavailable':
                  lmu = external_metadata.get('lastModifyingUser')
                  if lmu:
-                     metadata['last_editor'] = lmu.get('displayName') or lmu.get('emailAddress') or 'Unavailable'
+                     lmu_email = lmu.get('emailAddress')
+                     lmu_name = lmu.get('displayName')
+                     metadata['last_editor'] = to_gmail_username(lmu_name, lmu_email) or 'Unavailable'
 
             # Add Drive people via the deduplicating helper
             # Owners
             for owner in external_metadata.get('owners', []):
+                owner_email = owner.get('emailAddress')
+                owner_name = owner.get('displayName')
                 add_contributor(
-                    name=owner.get('displayName') or owner.get('emailAddress'),
+                    name=to_gmail_username(owner_name, owner_email),
                     role='Owner',
-                    email=owner.get('emailAddress'),
+                    email=owner_email,
                     date=external_metadata.get('createdTime')
                 )
             
             # Last Editor (Drive)
             lmu = external_metadata.get('lastModifyingUser')
             if lmu:
+                lmu_email = lmu.get('emailAddress')
+                lmu_name = lmu.get('displayName')
                 add_contributor(
-                    name=lmu.get('displayName') or lmu.get('emailAddress'),
+                    name=to_gmail_username(lmu_name, lmu_email),
                     role='Last Editor',
-                    email=lmu.get('emailAddress'),
+                    email=lmu_email,
                     date=external_metadata.get('modifiedTime')
                 )
 
             # Permissions (all collaborators)
             for perm in external_metadata.get('permissions', []):
+                perm_email = perm.get('emailAddress')
+                perm_name = perm.get('displayName')
                 add_contributor(
-                    name=perm.get('displayName') or perm.get('emailAddress'),
+                    name=to_gmail_username(perm_name, perm_email),
                     role=perm.get('role', 'contributor').capitalize(),
-                    email=perm.get('emailAddress')
+                    email=perm_email
                 )
 
         # [FINAL FALLBACK] Auth/Editor cleanup
@@ -226,7 +303,7 @@ class MetadataService:
             if not val or val.strip() == '' or 'python-docx' in val.lower() or val.lower() == 'none' or val.lower() == 'unavailable':
                 metadata[field] = 'Unavailable'
             else:
-                metadata[field] = val.strip()
+                metadata[field] = to_gmail_username(val)
 
         # If Author/Editor are still Unavailable, try to pick from contributors
         if metadata['contributors']:
@@ -240,6 +317,11 @@ class MetadataService:
                 # Reverse list to get the most recent one if multiple exist
                 potential_editor = next((c for c in reversed(metadata['contributors']) if c.get('role') in ['Last Editor', 'Editor']), metadata['contributors'][-1])
                 metadata['last_editor'] = potential_editor.get('name', 'Unavailable')
+
+        # If author is still unavailable but we have a reliable editor identity,
+        # use it as final fallback rather than showing an empty author.
+        if metadata['author'] == 'Unavailable' and metadata['last_editor'] != 'Unavailable':
+            metadata['author'] = metadata['last_editor']
 
         # Sync back to contributors one last time to ensure author/editor are listed with roles
         if metadata['author'] != 'Unavailable':

@@ -116,10 +116,6 @@ def register_blueprints(app):
     from app.api.reports import reports_bp
     app.register_blueprint(reports_bp, url_prefix='/api/v1/reports')
 
-    # Rubrics
-    from app.api.rubric import rubric_bp
-    app.register_blueprint(rubric_bp, url_prefix='/api/v1/rubrics')
-
 def register_error_handlers(app):
     """Register error handlers"""
     

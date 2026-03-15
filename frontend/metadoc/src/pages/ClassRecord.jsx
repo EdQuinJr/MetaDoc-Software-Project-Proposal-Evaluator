@@ -5,7 +5,6 @@ import {
     CheckCircle2,
     XCircle,
     Search,
-    Folder as FolderIcon,
     AlertCircle,
     Loader2,
     ArrowUpDown,
@@ -20,46 +19,40 @@ import Button from '../components/common/Button/Button';
 import '../styles/ClassRecord.css';
 
 const ClassRecord = () => {
-    const [folders, setFolders] = useState([]);
-    const [selectedFolder, setSelectedFolder] = useState('');
     const [loading, setLoading] = useState(false);
-    const [fetchingFolders, setFetchingFolders] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [sortBy, setSortBy] = useState('name-asc');
+    const [sortBy, setSortBy] = useState('none');
+    const [teamCodeFilter, setTeamCodeFilter] = useState('none');
     const [error, setError] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
+    const [fullNameDrafts, setFullNameDrafts] = useState({});
 
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
-    const [currentStudentId, setCurrentStudentId] = useState(null); // Database ID
+    const [currentStudentId, setCurrentStudentId] = useState(null);
     const [formData, setFormData] = useState({
         student_id: '',
         last_name: '',
         first_name: '',
-        email: ''
+        course_year: '',
+        email: '',
+        team_code: ''
     });
 
     const fileInputRef = useRef(null);
-
-    // Student records from backend
     const [classRows, setClassRows] = useState([]);
 
+    const teamCodeOptions = [...new Set(
+        classRows
+            .map((row) => String(row.teamCode || '').trim())
+            .filter(Boolean)
+    )].sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+
     useEffect(() => {
-        fetchFolders();
+        fetchStudents();
     }, []);
 
-    // Fetch students when folder changes
-    useEffect(() => {
-        if (selectedFolder) {
-            fetchStudents();
-        } else {
-            setClassRows([]);
-            setSelectedIds([]);
-        }
-    }, [selectedFolder]);
-
-    // Auto-clear error after 3 seconds
     useEffect(() => {
         if (error) {
             const timer = setTimeout(() => {
@@ -69,36 +62,23 @@ const ClassRecord = () => {
         }
     }, [error]);
 
-    const fetchFolders = async () => {
-        try {
-            setFetchingFolders(true);
-            const response = await dashboardAPI.getDeadlines();
-            setFolders(response.data.deadlines || []);
-        } catch (err) {
-            console.error('Failed to fetch folders:', err);
-        } finally {
-            setFetchingFolders(false);
-        }
-    };
-
     const fetchStudents = async () => {
         try {
             setLoading(true);
-            const response = await dashboardAPI.getDeadlineStudents(selectedFolder);
-            // Map backend fields to frontend display fields
+            const response = await dashboardAPI.getDeadlineStudents(); // mapped to -> /students
             const mapped = (response.data.students || []).map(s => ({
-                id: s.id, // Database UUID
-                studentId: formatStudentId(s.student_id), // Format for display
+                id: s.id,
+                studentId: formatStudentId(s.student_id),
                 lastName: s.last_name,
                 firstName: s.first_name,
+                courseYear: s.course_year || '',
                 email: s.email,
+                teamCode: s.team_code || '',
                 status: s.status,
-                registrationDate: s.registration_date,
-                deadlineTitle: s.deadline_title,
-                deadlineId: s.deadline_id
+                registrationDate: s.registration_date
             }));
             setClassRows(mapped);
-            setSelectedIds([]); // Reset selection on fetch
+            setSelectedIds([]);
         } catch (err) {
             console.error('Failed to fetch students:', err);
         } finally {
@@ -118,15 +98,18 @@ const ClassRecord = () => {
         reader.onload = async (event) => {
             const text = event.target.result;
             const rows = text.split('\n');
-            const headers = rows[0].toLowerCase().split(',');
+            const headers = rows[0].toLowerCase().split(',').map(h => h.trim());
 
-            const idIdx = headers.findIndex(h => h.includes('id') || h.includes('number'));
-            const lastIdx = headers.findIndex(h => h.includes('last') || h.includes('surname'));
-            const firstIdx = headers.findIndex(h => h.includes('first') || h.includes('given'));
-            const emailIdx = headers.findIndex(h => h.includes('email') || h.includes('mail'));
+            const idIdx = headers.findIndex(h => h.includes('id') || h.includes('student no'));
+            const nameIdx = headers.findIndex(h => h.includes('name of student') || h.includes('name'));
+            const lastIdx = headers.findIndex(h => h === 'last name' || h.includes('surname'));
+            const firstIdx = headers.findIndex(h => h === 'first name' || h.includes('given'));
+            const courseIdx = headers.findIndex(h => h.includes('course') || h.includes('year'));
+            const emailIdx = headers.findIndex(h => h.includes('gmail') || h.includes('email'));
+            const teamIdx = headers.findIndex(h => h.includes('team') || h.includes('group') || h.includes('code'));
 
-            if (idIdx === -1 || lastIdx === -1) {
-                setError('CSV must contain ID and Last Name columns.');
+            if (idIdx === -1) {
+                setError('CSV must contain a "STUDENT NO." or ID column.');
                 return;
             }
 
@@ -138,17 +121,31 @@ const ClassRecord = () => {
                 const studentId = row[idIdx];
                 if (!studentId) continue;
 
+                let lastName = '';
+                let firstName = '';
+
+                if (nameIdx !== -1 && row[nameIdx] && nameIdx !== lastIdx && nameIdx !== firstIdx) {
+                    const nameParts = row[nameIdx].split(/\s+/);
+                    lastName = nameParts.length > 1 ? nameParts.pop() : nameParts[0];
+                    firstName = nameParts.length > 0 ? nameParts.join(' ') : '';
+                } else {
+                    lastName = lastIdx !== -1 ? row[lastIdx] : '';
+                    firstName = firstIdx !== -1 ? row[firstIdx] : '';
+                }
+
                 students.push({
                     student_id: studentId,
-                    last_name: row[lastIdx] || '',
-                    first_name: firstIdx !== -1 ? row[firstIdx] : '',
-                    email: emailIdx !== -1 ? row[emailIdx] : ''
+                    last_name: lastName || '',
+                    first_name: firstName || '',
+                    course_year: courseIdx !== -1 ? row[courseIdx] : '',
+                    email: emailIdx !== -1 ? row[emailIdx] : '',
+                    team_code: teamIdx !== -1 ? row[teamIdx] : ''
                 });
             }
 
             try {
                 setLoading(true);
-                await dashboardAPI.importDeadlineStudents(selectedFolder, students);
+                await dashboardAPI.importDeadlineStudents(students);
                 fetchStudents();
             } catch (err) {
                 console.error('Import failed:', err);
@@ -162,21 +159,67 @@ const ClassRecord = () => {
     };
 
     const handleToggleSelect = (id) => {
-        setSelectedIds(prev =>
-            prev.includes(id)
-                ? prev.filter(i => i !== id)
-                : [...prev, id]
-        );
+        setSelectedIds(prev => {
+            const isSelected = prev.includes(id);
+            if (isSelected) {
+                setFullNameDrafts(drafts => {
+                    if (!(id in drafts)) return drafts;
+                    const next = { ...drafts };
+                    delete next[id];
+                    return next;
+                });
+                return prev.filter(i => i !== id);
+            }
+            return [...prev, id];
+        });
+    };
+
+    const parseFullName = (fullName, existingFirstName = '', existingLastName = '') => {
+        const normalized = (fullName || '').replace(/\s+/g, ' ').trim();
+        if (!normalized) {
+            return { firstName: existingFirstName, lastName: existingLastName };
+        }
+
+        const parts = normalized.split(' ');
+        if (parts.length === 1) {
+            return {
+                firstName: parts[0],
+                lastName: existingLastName || ''
+            };
+        }
+
+        return {
+            firstName: parts.slice(0, -1).join(' '),
+            lastName: parts[parts.length - 1]
+        };
+    };
+
+    const handleFullNameDraftChange = (id, value) => {
+        setFullNameDrafts(prev => ({ ...prev, [id]: value }));
+    };
+
+    const commitFullNameDraft = (id) => {
+        const draftValue = fullNameDrafts[id];
+        if (draftValue === undefined) return;
+
+        setClassRows(prev => prev.map(row => {
+            if (row.id !== id) return row;
+
+            const { firstName, lastName } = parseFullName(draftValue, row.firstName, row.lastName);
+            return { ...row, firstName, lastName };
+        }));
+
+        setFullNameDrafts(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
     };
 
     const formatStudentId = (input) => {
         if (!input) return '';
-        // Remove all non-digits
         const digits = input.replace(/\D/g, '');
-        
-        // Pattern: XX-XXXX-XXX (total 9 digits)
         const limited = digits.slice(0, 9);
-        
         let result = '';
         if (limited.length > 0) {
             result += limited.slice(0, 2);
@@ -191,10 +234,11 @@ const ClassRecord = () => {
     };
 
     const handleRowChange = (id, field, value) => {
-        const finalValue = field === 'studentId' ? formatStudentId(value) : value;
-        setClassRows(prev => prev.map(row =>
-            row.id === id ? { ...row, [field]: finalValue } : row
-        ));
+        setClassRows(prev => prev.map(row => {
+            if (row.id !== id) return row;
+            if (field === 'studentId') return { ...row, studentId: formatStudentId(value) };
+            return { ...row, [field]: value };
+        }));
     };
 
     const handleKeyPress = (e) => {
@@ -205,7 +249,6 @@ const ClassRecord = () => {
 
     const handleBulkSave = async () => {
         if (selectedIds.length === 0) return;
-
         try {
             setLoading(true);
             const errors = [];
@@ -213,24 +256,32 @@ const ClassRecord = () => {
                 const row = classRows.find(r => r.id === id);
                 if (row) {
                     try {
+                        const draftFullName = fullNameDrafts[row.id];
+                        const { firstName, lastName } = draftFullName !== undefined
+                            ? parseFullName(draftFullName, row.firstName, row.lastName)
+                            : { firstName: row.firstName, lastName: row.lastName };
+
                         const updateData = {
                             student_id: row.studentId,
-                            last_name: row.lastName,
-                            first_name: row.firstName,
-                            email: row.email
+                            last_name: lastName,
+                            first_name: firstName,
+                            course_year: row.courseYear,
+                            email: row.email,
+                            team_code: row.teamCode
                         };
-                        await dashboardAPI.updateDeadlineStudent(row.deadlineId, row.id, updateData);
+                        await dashboardAPI.updateDeadlineStudent(row.id, updateData);
                     } catch (err) {
-                        errors.push(row.studentId);
+                        const message = err.response?.data?.error || 'Unknown error';
+                        errors.push(`${row.studentId}: ${message}`);
                     }
                 }
             }
-
             if (errors.length > 0) {
-                setError(`Failed to save some records: ${errors.length} errors occurred.`);
+                setError(`Failed to save some records (${errors.length}): ${errors.slice(0, 2).join(' | ')}`);
             } else {
                 fetchStudents();
                 setSelectedIds([]);
+                setFullNameDrafts({});
             }
         } catch (err) {
             console.error('Bulk save error:', err);
@@ -242,11 +293,7 @@ const ClassRecord = () => {
 
     const handleBulkDelete = async () => {
         if (selectedIds.length === 0) return;
-
-        if (!window.confirm(`Are you sure you want to delete ${selectedIds.length} selected student records?`)) {
-            return;
-        }
-
+        if (!window.confirm(`Are you sure you want to delete ${selectedIds.length} selected student records?`)) return;
         try {
             setLoading(true);
             const errors = [];
@@ -254,18 +301,15 @@ const ClassRecord = () => {
                 const student = classRows.find(r => r.id === id);
                 if (student) {
                     try {
-                        // Use database ID (UUID) for safer deletion
-                        await dashboardAPI.deleteDeadlineStudent(student.deadlineId, student.id);
+                        await dashboardAPI.deleteDeadlineStudent(student.id);
                     } catch (err) {
                         errors.push(student.studentId);
                     }
                 }
             }
-
             if (errors.length > 0) {
                 setError(`Failed to delete some records: ${errors.length} errors occurred.`);
             }
-
             fetchStudents();
             setSelectedIds([]);
         } catch (err) {
@@ -283,21 +327,18 @@ const ClassRecord = () => {
             student_id: '',
             last_name: '',
             first_name: '',
-            email: ''
+            course_year: '',
+            email: '',
+            team_code: ''
         });
         setIsModalOpen(true);
     };
 
     const handleModalSubmit = async (e) => {
         e.preventDefault();
-        if (!selectedFolder || selectedFolder === 'all') {
-            setError('Please select a specific folder first.');
-            return;
-        }
-
         try {
             setLoading(true);
-            await dashboardAPI.addDeadlineStudent(selectedFolder, formData);
+            await dashboardAPI.addDeadlineStudent(formData);
             setIsModalOpen(false);
             fetchStudents();
         } catch (err) {
@@ -310,329 +351,279 @@ const ClassRecord = () => {
 
     return (
         <div className="class-record-page fade-in">
-            <div className="page-container">
-                <div className="class-record-header">
-                    <div className="header-title-group">
-                        <Users size={24} className="text-maroon" />
-                        <h1>Class Record</h1>
-                    </div>
+            <div className="class-record-header">
+                <div>
+                    <h1>Class Record</h1>
+                    <p className="class-record-subtitle">Manage and track student records for each academic section</p>
                 </div>
+                <div className="class-record-actions">
+                    <button
+                        type="button"
+                        className="btn btn-primary btn-add-student"
+                        aria-label="Add student manually"
+                        title="Add student manually"
+                        onClick={handleOpenAddModal}
+                    >
+                        <Plus size={22} />
+                    </button>
+                </div>
+            </div>
 
-                <div className="main-content">
-                    {error && (
-                        <div className="import-error-banner">
-                            <AlertCircle size={20} />
-                            <span>{error}</span>
-                            <button className="error-close-btn" onClick={() => setError(null)}>×</button>
-                        </div>
-                    )}
-                    <Card className="table-card">
-                        <div className="table-header-row">
-                            <div className="table-controls">
-                                <div className="folder-select-container">
-                                    {fetchingFolders ? (
-                                        <Loader2 size={18} className="animate-spin text-gray-400" />
-                                    ) : (
-                                        <select
-                                            className="folder-dropdown-inline"
-                                            value={selectedFolder}
-                                            onChange={(e) => setSelectedFolder(e.target.value)}
-                                        >
-                                            <option value="">-- Choose a Folder --</option>
-                                            <option value="all" className="font-bold text-maroon">ALL</option>
-                                            {folders.map(folder => (
-                                                <option key={folder.id} value={folder.id}>
-                                                    {folder.title}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    )}
-                                </div>
+            {error && (
+                <div className="import-error-banner">
+                    <AlertCircle size={20} />
+                    <span>{error}</span>
+                    <button className="error-close-btn" onClick={() => setError(null)}>×</button>
+                </div>
+            )}
 
-                                <div className="sort-container">
-                                    <div className="search-box sort-box">
-                                        <ArrowUpDown size={18} />
-                                        <select
-                                            className="sort-dropdown"
-                                            value={sortBy}
-                                            onChange={(e) => setSortBy(e.target.value)}
-                                            disabled={!selectedFolder}
-                                        >
-                                            <option value="name-asc">A-Z (Name)</option>
-                                            <option value="name-desc">Z-A (Name)</option>
-                                            <option value="date-desc">Latest Registered</option>
-                                            <option value="date-asc">Oldest Registered</option>
-                                        </select>
-                                    </div>
-                                </div>
+            <div className="cr-filters">
+                <form className="cr-search-form" onSubmit={(e) => e.preventDefault()}>
+                    <div className="cr-search-wrapper">
+                        <Search size={20} className="cr-search-icon" />
+                        <input
+                            type="text"
+                            className="cr-search-input"
+                            placeholder="Search by ID, Name, Email, or Team..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </form>
+                <div className="cr-filter-group">
+                    <select
+                        className="cr-filter-select team-code-filter-select"
+                        value={teamCodeFilter}
+                        onChange={(e) => setTeamCodeFilter(e.target.value)}
+                    >
+                        <option value="none">Select Code</option>
+                        {teamCodeOptions.map((teamCode) => (
+                            <option key={teamCode} value={teamCode}>{teamCode}</option>
+                        ))}
+                    </select>
+                    <select
+                        className="cr-filter-select"
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                    >
+                        <option value="none">NONE</option>
+                        <option value="name-asc">A-Z (Name)</option>
+                        <option value="name-desc">Z-A (Name)</option>
+                        <option value="date-desc">Latest Registered</option>
+                        <option value="date-asc">Oldest Registered</option>
+                    </select>
+                </div>
+                {classRows.length > 0 && (
+                    <span className="record-count">{classRows.length} Students</span>
+                )}
+                {selectedIds.length > 0 && (
+                    <div className="bulk-actions fade-in" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button onClick={handleBulkSave} className="action-button-clean" title="Save Changes" disabled={loading} style={{ border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Save size={16} /> <span className="action-label" style={{ fontSize: '14px', fontWeight: '500' }}>Save</span>
+                        </button>
+                        <button onClick={handleBulkDelete} className="action-button-clean" title={`Delete Selected (${selectedIds.length})`} disabled={loading} style={{ border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Trash2 size={16} /> <span className="action-label" style={{ fontSize: '14px', fontWeight: '500' }}>Delete</span>
+                        </button>
+                    </div>
+                )}
+            </div>
 
-                                <div className="search-box">
-                                    <Search size={18} />
-                                    <input
-                                        type="text"
-                                        placeholder="Search by ID, Name or Email..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        disabled={!selectedFolder}
-                                    />
-                                </div>
-
-                                {selectedIds.length > 0 && (
-                                    <div className="bulk-actions fade-in" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <button
-                                            onClick={handleBulkSave}
-                                            style={{
-                                                color: '#000000',
-                                                background: 'none',
-                                                border: 'none',
-                                                padding: '4px',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                transition: 'none'
-                                            }}
-                                            title="Save Changes"
-                                            disabled={loading}
-                                        >
-                                            <Save size={16} />
-                                            <span style={{ marginLeft: '4px', fontSize: '0.85rem', fontWeight: '500' }}>Save</span>
-                                        </button>
-                                        <button
-                                            onClick={handleBulkDelete}
-                                            style={{
-                                                color: '#000000',
-                                                background: 'none',
-                                                border: 'none',
-                                                padding: '4px',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                transition: 'none'
-                                            }}
-                                            title={`Delete Selected (${selectedIds.length})`}
-                                            disabled={loading}
-                                        >
-                                            <Trash2 size={16} />
-                                            <span style={{ marginLeft: '4px', fontSize: '0.85rem', fontWeight: '500' }}>Delete</span>
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="table-actions">
-                                {selectedFolder && selectedFolder !== 'all' && (
-                                    <button
-                                        className="add-student-btn-maroon"
-                                        onClick={handleOpenAddModal}
-                                        title="Add Student Manually"
-                                    >
-                                        <Plus size={16} />
-                                    </button>
-                                )}
-                                {selectedFolder && classRows.length > 0 && (
-                                    <span className="record-count">{classRows.length} Students</span>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="table-container">
-                            {selectedFolder ? (
-                                <table className="record-table">
-                                    <thead>
-                                        <tr>
-                                            <th style={{ width: '40px' }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={classRows.length > 0 && selectedIds.length === classRows.length}
-                                                    onChange={() => {
-                                                        if (selectedIds.length === classRows.length) {
-                                                            setSelectedIds([]);
-                                                        } else {
-                                                            setSelectedIds(classRows.map(r => r.id));
-                                                        }
-                                                    }}
-                                                    className="row-checkbox"
-                                                />
-                                            </th>
-                                            {selectedFolder === 'all' && <th>TITLE</th>}
-                                            <th>ID Number</th>
-                                            <th>Last Name</th>
-                                            <th>First Name</th>
-                                            <th>Email Address</th>
-                                            <th>Date Registered</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {(() => {
-                                            const filteredRows = classRows
-                                                .filter(row => {
-                                                    const searchStr = searchTerm.toLowerCase();
-                                                    return (
-                                                        (row.studentId?.toLowerCase() || '').includes(searchStr) ||
-                                                        (row.lastName?.toLowerCase() || '').includes(searchStr) ||
-                                                        (row.firstName?.toLowerCase() || '').includes(searchStr) ||
-                                                        (row.email?.toLowerCase() || '').includes(searchStr)
-                                                    );
-                                                })
-                                                .sort((a, b) => {
-                                                    if (sortBy === 'name-asc') {
-                                                        const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
-                                                        const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
-                                                        return nameA.localeCompare(nameB);
+            <div className="cr-table-wrapper">
+                <div className="table-container">
+                            <table className="record-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '40px' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={classRows.length > 0 && selectedIds.length === classRows.length}
+                                                onChange={() => {
+                                                    if (selectedIds.length === classRows.length) {
+                                                        setSelectedIds([]);
+                                                    } else {
+                                                        setSelectedIds(classRows.map(r => r.id));
                                                     }
-                                                    if (sortBy === 'name-desc') {
-                                                        const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
-                                                        const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
-                                                        return nameB.localeCompare(nameA);
-                                                    }
-                                                    if (sortBy === 'date-desc') {
-                                                        const dateA = a.registrationDate ? new Date(a.registrationDate) : new Date(0);
-                                                        const dateB = b.registrationDate ? new Date(b.registrationDate) : new Date(0);
-                                                        return dateB - dateA;
-                                                    }
-                                                    if (sortBy === 'date-asc') {
-                                                        const dateA = a.registrationDate ? new Date(a.registrationDate) : new Date(0);
-                                                        const dateB = b.registrationDate ? new Date(b.registrationDate) : new Date(0);
-                                                        return dateA - dateB;
-                                                    }
-                                                    return 0;
-                                                });
-
-                                            if (classRows.length === 0) {
-                                                const colSpan = selectedFolder === 'all' ? 8 : 7;
-                                                return (
-                                                    <tr>
-                                                        <td colSpan={colSpan} className="no-padding">
-                                                            <div className="empty-state-dashed-inline">
-                                                                <Users size={48} className="empty-icon-gray" />
-                                                                <h3>No Student Records</h3>
-                                                                {selectedFolder === 'all' ? (
-                                                                    <p>Please select a specific folder to import or manage students.</p>
-                                                                ) : (
-                                                                    <>
-                                                                        <p>Import a class record to start managing student registrations.</p>
-                                                                        <Button
-                                                                            onClick={handleImportClick}
-                                                                            variant="primary"
-                                                                            size="small"
-                                                                            icon={FileUp}
-                                                                            disabled={loading}
-                                                                        >
-                                                                            {loading ? 'Importing...' : 'Import Class Record'}
-                                                                        </Button>
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                    </tr>
+                                                }}
+                                                className="row-checkbox"
+                                            />
+                                        </th>
+                                        <th style={{ width: '40px' }}>No.</th>
+                                        <th>NAME OF STUDENT</th>
+                                        <th>STUDENT NO.</th>
+                                        <th>COURSE & YEAR</th>
+                                        <th>GMAIL</th>
+                                        <th>TEAM CODE</th>
+                                        <th>DATE REGISTERED</th>
+                                        <th>STATUS</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(() => {
+                                        const rowNumberById = new Map(classRows.map((r, i) => [r.id, i + 1]));
+                                        const filteredRows = classRows
+                                            .filter(row => {
+                                                const searchStr = searchTerm.toLowerCase();
+                                                const matchesSearch = (
+                                                    (row.studentId?.toLowerCase() || '').includes(searchStr) ||
+                                                    (row.lastName?.toLowerCase() || '').includes(searchStr) ||
+                                                    (row.firstName?.toLowerCase() || '').includes(searchStr) ||
+                                                    (row.email?.toLowerCase() || '').includes(searchStr) ||
+                                                    (row.teamCode?.toLowerCase() || '').includes(searchStr) ||
+                                                    (row.courseYear?.toLowerCase() || '').includes(searchStr)
                                                 );
-                                            }
 
-                                            if (filteredRows.length === 0) {
-                                                const colSpan = selectedFolder === 'all' ? 8 : 7;
-                                                return (
-                                                    <tr>
-                                                        <td colSpan={colSpan} className="search-no-results">
-                                                            <div className="no-match-message">
-                                                                <Search size={32} className="opacity-20" />
-                                                                <p>No student records match "<strong>{searchTerm}</strong>"</p>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="small"
-                                                                    onClick={() => setSearchTerm('')}
-                                                                >
-                                                                    Clear Search
-                                                                </Button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            }
+                                                const matchesTeamCode = teamCodeFilter === 'none'
+                                                    ? true
+                                                    : String(row.teamCode || '').trim() === teamCodeFilter;
 
-                                            return filteredRows.map((row, index) => (
-                                                <tr key={index} style={{ backgroundColor: selectedIds.includes(row.id) ? '#fffaf0' : 'inherit' }}>
-                                                    <td>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selectedIds.includes(row.id)}
-                                                            onChange={() => handleToggleSelect(row.id)}
-                                                            className="row-checkbox"
-                                                        />
-                                                    </td>
-                                                    {selectedFolder === 'all' && (
-                                                        <td className="font-bold text-maroon text-xs whitespace-nowrap">
-                                                            {row.deadlineTitle}
-                                                        </td>
-                                                    )}
-                                                    <td className="font-mono">
-                                                        {selectedIds.includes(row.id) ? (
-                                                            <input
-                                                                className="inline-edit-input"
-                                                                value={row.studentId}
-                                                                onChange={(e) => handleRowChange(row.id, 'studentId', e.target.value)}
-                                                                onKeyDown={handleKeyPress}
-                                                            />
-                                                        ) : row.studentId}
-                                                    </td>
-                                                    <td className="font-bold">
-                                                        {selectedIds.includes(row.id) ? (
-                                                            <input
-                                                                className="inline-edit-input font-bold"
-                                                                value={row.lastName}
-                                                                onChange={(e) => handleRowChange(row.id, 'lastName', e.target.value)}
-                                                                onKeyDown={handleKeyPress}
-                                                            />
-                                                        ) : row.lastName}
-                                                    </td>
-                                                    <td>
-                                                        {selectedIds.includes(row.id) ? (
-                                                            <input
-                                                                className="inline-edit-input"
-                                                                value={row.firstName}
-                                                                onChange={(e) => handleRowChange(row.id, 'firstName', e.target.value)}
-                                                                onKeyDown={handleKeyPress}
-                                                            />
-                                                        ) : row.firstName}
-                                                    </td>
-                                                    <td>
-                                                        {selectedIds.includes(row.id) ? (
-                                                            <input
-                                                                className="inline-edit-input text-blue-600"
-                                                                value={row.email}
-                                                                onChange={(e) => handleRowChange(row.id, 'email', e.target.value)}
-                                                                onKeyDown={handleKeyPress}
-                                                            />
-                                                        ) : (
-                                                            <span className="text-blue-600 underline">{row.email}</span>
-                                                        )}
-                                                    </td>
-                                                    <td>
-                                                        {row.status === 'Registered' ? (
-                                                            <span className="text-gray-500">{row.registrationDate}</span>
-                                                        ) : (
-                                                            <span className="text-gray-300">---</span>
-                                                        )}
-                                                    </td>
-                                                    <td>
-                                                        <span className={`status-tag ${row.status.toLowerCase()}`}>
-                                                            {row.status === 'Registered' ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
-                                                            {row.status}
-                                                        </span>
+                                                return matchesSearch && matchesTeamCode;
+                                            })
+                                            .sort((a, b) => {
+                                                if (sortBy === 'name-asc') {
+                                                    const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
+                                                    const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
+                                                    return nameA.localeCompare(nameB);
+                                                }
+                                                if (sortBy === 'name-desc') {
+                                                    const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
+                                                    const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
+                                                    return nameB.localeCompare(nameA);
+                                                }
+                                                if (sortBy === 'date-desc') {
+                                                    const dateA = a.registrationDate ? new Date(a.registrationDate) : new Date(0);
+                                                    const dateB = b.registrationDate ? new Date(b.registrationDate) : new Date(0);
+                                                    return dateB - dateA;
+                                                }
+                                                if (sortBy === 'date-asc') {
+                                                    const dateA = a.registrationDate ? new Date(a.registrationDate) : new Date(0);
+                                                    const dateB = b.registrationDate ? new Date(b.registrationDate) : new Date(0);
+                                                    return dateA - dateB;
+                                                }
+                                                return 0;
+                                            });
+
+                                        if (classRows.length === 0) {
+                                            return (
+                                                <tr>
+                                                    <td colSpan={9} className="no-padding">
+                                                        <div className="empty-state-dashed-inline">
+                                                            <Users size={48} className="empty-icon-gray" />
+                                                            <h3>No Student Records</h3>
+                                                            <p>Import a class record to start managing student registrations.</p>
+                                                            <Button
+                                                                onClick={handleImportClick}
+                                                                variant="primary"
+                                                                size="small"
+                                                                icon={FileUp}
+                                                                disabled={loading}
+                                                            >
+                                                                {loading ? 'Importing...' : 'Import Record'}
+                                                            </Button>
+                                                        </div>
                                                     </td>
                                                 </tr>
-                                            ));
-                                        })()}
-                                    </tbody>
-                                </table>
-                            ) : (
-                                <div className="no-selection-state">
-                                    <FolderIcon size={64} className="opacity-10" />
-                                    <p>Select a folder to view student records</p>
-                                </div>
-                            )}
-                        </div>
-                    </Card>
+                                            );
+                                        }
+
+                                        if (filteredRows.length === 0) {
+                                            return (
+                                                <tr>
+                                                    <td colSpan={9} className="search-no-results">
+                                                        <div className="no-match-message">
+                                                            <Search size={32} className="opacity-20" />
+                                                            <p>No student records match "<strong>{searchTerm}</strong>"</p>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="small"
+                                                                onClick={() => setSearchTerm('')}
+                                                            >
+                                                                Clear Search
+                                                            </Button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
+
+                                        return filteredRows.map((row, index) => (
+                                            <tr key={row.id} style={{ backgroundColor: selectedIds.includes(row.id) ? '#fffaf0' : 'inherit' }}>
+                                                <td>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedIds.includes(row.id)}
+                                                        onChange={() => handleToggleSelect(row.id)}
+                                                        className="row-checkbox"
+                                                    />
+                                                </td>
+                                                <td className="font-bold text-gray-500">
+                                                    {rowNumberById.get(row.id) ?? index + 1}
+                                                </td>
+                                                <td className="font-bold">
+                                                    {selectedIds.includes(row.id) ? (
+                                                        <input
+                                                            className="inline-edit-input font-bold"
+                                                            value={fullNameDrafts[row.id] ?? `${row.firstName} ${row.lastName}`.trim()}
+                                                            onChange={(e) => handleFullNameDraftChange(row.id, e.target.value)}
+                                                            onBlur={() => commitFullNameDraft(row.id)}
+                                                            onKeyDown={handleKeyPress}
+                                                        />
+                                                    ) : `${row.firstName} ${row.lastName}`.trim()}
+                                                </td>
+                                                <td className="font-mono text-gray-600">
+                                                    {selectedIds.includes(row.id) ? (
+                                                        <input
+                                                            className="inline-edit-input"
+                                                            value={row.studentId}
+                                                            onChange={(e) => handleRowChange(row.id, 'studentId', e.target.value)}
+                                                            onKeyDown={handleKeyPress}
+                                                        />
+                                                    ) : row.studentId}
+                                                </td>
+                                                <td className="font-mono text-gray-600">
+                                                    {selectedIds.includes(row.id) ? (
+                                                        <input
+                                                            className="inline-edit-input text-gray-800"
+                                                            value={row.courseYear}
+                                                            onChange={(e) => handleRowChange(row.id, 'courseYear', e.target.value)}
+                                                            onKeyDown={handleKeyPress}
+                                                        />
+                                                    ) : row.courseYear}
+                                                </td>
+                                                <td>
+                                                    {selectedIds.includes(row.id) ? (
+                                                        <input
+                                                            className="inline-edit-input text-blue-600"
+                                                            value={row.email}
+                                                            onChange={(e) => handleRowChange(row.id, 'email', e.target.value)}
+                                                            onKeyDown={handleKeyPress}
+                                                        />
+                                                    ) : (
+                                                        <span className="text-blue-600 underline">{row.email}</span>
+                                                    )}
+                                                </td>
+                                                <td className="font-mono font-bold text-maroon">
+                                                    {selectedIds.includes(row.id) ? (
+                                                        <input
+                                                            className="inline-edit-input text-maroon font-bold"
+                                                            value={row.teamCode}
+                                                            onChange={(e) => handleRowChange(row.id, 'teamCode', e.target.value)}
+                                                            onKeyDown={handleKeyPress}
+                                                        />
+                                                    ) : row.teamCode}
+                                                </td>
+                                                <td className="text-gray-500 text-sm">
+                                                    {row.registrationDate ? new Date(row.registrationDate).toLocaleDateString() : 'N/A'}
+                                                </td>
+                                                <td>
+                                                    <span className={`status-badge ${row.status === 'Registered' || row.is_registered ? 'status-registered' : 'status-pending'}`}>
+                                                        {row.status || (row.is_registered ? 'Registered' : 'Pending')}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ));
+                                    })()}
+                                </tbody>
+                            </table>
                 </div>
             </div>
 
@@ -659,16 +650,6 @@ const ClassRecord = () => {
                             </div>
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>Last Name</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        placeholder="Surname"
-                                        value={formData.last_name}
-                                        onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                                    />
-                                </div>
-                                <div className="form-group">
                                     <label>First Name</label>
                                     <input
                                         type="text"
@@ -678,16 +659,45 @@ const ClassRecord = () => {
                                         onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
                                     />
                                 </div>
+                                <div className="form-group">
+                                    <label>Last Name</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        placeholder="Surname"
+                                        value={formData.last_name}
+                                        onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Course & Year</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. BSCS 4"
+                                        value={formData.course_year}
+                                        onChange={(e) => setFormData({ ...formData, course_year: e.target.value })}
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Team Code</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. TEAM-A"
+                                        value={formData.team_code}
+                                        onChange={(e) => setFormData({ ...formData, team_code: e.target.value })}
+                                    />
+                                </div>
                             </div>
                             <div className="form-group">
-                                <label>Email Address (Gmail Preferred)</label>
+                                <label>Email Address</label>
                                 <input
                                     type="email"
                                     placeholder="student@gmail.com"
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                 />
-                                <p className="form-hint">Used for matching document activity.</p>
                             </div>
                             <div className="modal-footer">
                                 <Button
@@ -714,7 +724,7 @@ const ClassRecord = () => {
             <input
                 type="file"
                 ref={fileInputRef}
-                className="hidden"
+                style={{ display: 'none' }}
                 accept=".xlsx, .xls, .csv"
                 onChange={handleFileChange}
             />

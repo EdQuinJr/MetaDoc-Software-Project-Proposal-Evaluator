@@ -6,10 +6,8 @@ import Register from './pages/Register';
 import OAuthCallback from './pages/OAuthCallback';
 import TokenBasedSubmission from './pages/TokenBasedSubmission';
 import Dashboard from './pages/Dashboard';
-import Folder from './pages/Folder';
+import Deliverable from './pages/Deliverable';
 import SubmissionDetailView from './pages/SubmissionDetailView';
-import Deadlines from './pages/Deadlines';
-import Rubrics from './pages/Rubrics';
 import Reports from './pages/Reports';
 import ClassRecord from './pages/ClassRecord';
 import StudentLogin from './pages/StudentLogin';
@@ -102,21 +100,22 @@ function App() {
             }
           />
           <Route
-            path="/dashboard/folders"
+            path="/dashboard/deliverables"
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <Folder />
+                  <Deliverable />
                 </DashboardLayout>
               </ProtectedRoute>
             }
           />
+          <Route path="/dashboard/folders" element={<Navigate to="/dashboard/deliverables" replace />} />
           <Route
             path="/dashboard/submissions"
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <Folder />
+                  <Deliverable />
                 </DashboardLayout>
               </ProtectedRoute>
             }
@@ -131,26 +130,7 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/dashboard/deadlines"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Deadlines />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard/rubrics"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Rubrics />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+
           <Route
             path="/dashboard/class-record"
             element={

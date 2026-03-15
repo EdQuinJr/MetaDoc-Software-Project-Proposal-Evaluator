@@ -84,6 +84,8 @@ def get_submissions():
             filters['deadline_id'] = request.args.get('deadline_id')
         if request.args.get('student_id'):
             filters['student_id'] = request.args.get('student_id')
+        if request.args.get('team_code'):
+            filters['team_code'] = request.args.get('team_code')
         if request.args.get('date_from'):
             filters['date_from'] = request.args.get('date_from')
         if request.args.get('date_to'):
@@ -271,10 +273,18 @@ def get_submission_detail(submission_id):
                         # ONLY for direct file uploads. For Google Drive, we prefer 'Unavailable' over incorrect attribution
                         # unless the user strictly requested otherwise.
                         if submission.student_name and not submission.google_drive_link and new_metadata.get('author') == 'Unavailable':
+                            from app.models import Student
+
+                            student_row = None
+                            if submission.student_id and submission.professor_id:
+                                student_row = Student.query.filter_by(
+                                    professor_id=submission.professor_id,
+                                    student_id=submission.student_id
+                                ).first()
+
+                            student_email = (student_row.email.strip().lower() if student_row and student_row.email else None)
+
                             new_metadata['author'] = submission.student_name
-                            
-                            if new_metadata.get('last_editor') == 'Unavailable':
-                                new_metadata['last_editor'] = submission.student_name
                             
                             # Ensure contributors list has the student
                             has_student = False
@@ -305,66 +315,6 @@ def get_submission_detail(submission_id):
                         current_app.logger.info("Metadata auto-repaired successfully")
         except Exception as e:
             current_app.logger.error(f"Auto-repair failed (non-critical): {e}")
-
-        # [Auto-Repair] Check if AI Rubric Evaluation is missing but required
-        try:
-            if submission.deadline and submission.deadline.rubric:
-                needs_ai_repair = False
-                if not submission.analysis_result:
-                     needs_ai_repair = True 
-                elif not submission.analysis_result.ai_insights:
-                     needs_ai_repair = True
-                elif 'rubric_evaluation' not in submission.analysis_result.ai_insights:
-                     needs_ai_repair = True
-                
-                if needs_ai_repair:
-                    current_app.logger.info(f"Auto-repairing AI analysis for submission {submission.id}")
-                    
-                    # Ensure we have text
-                    doc_text = None
-                    if submission.analysis_result and submission.analysis_result.document_text:
-                        doc_text = submission.analysis_result.document_text
-                    
-                    # If no text, try to read from file (if we have path from previous step or original)
-                    if not doc_text and processing_path and os.path.exists(processing_path):
-                         from app.services.metadata_service import MetadataService
-                         meta_service = MetadataService()
-                         doc_text = meta_service.extract_document_text(processing_path)
-                    
-                    if doc_text:
-                         from app.services.nlp_service import NLPService
-                         nlp_service = NLPService()
-                         
-                         rubric_data = submission.deadline.rubric.to_dict()
-                         context = {
-                            'assignment_type': submission.deadline.assignment_type or 'General',
-                            'student_level': 'Undergraduate' # Default
-                         }
-                         
-                         ai_summary, ai_error = nlp_service.generate_ai_summary(doc_text, context, rubric=rubric_data)
-                         
-                         if ai_summary and not ai_error:
-                             if not submission.analysis_result:
-                                 from app.models import AnalysisResult
-                                 submission.analysis_result = AnalysisResult(submission_id=submission.id)
-                                 db.session.add(submission.analysis_result)
-                             
-                             submission.analysis_result.ai_summary = ai_summary.get('summary')
-                             submission.analysis_result.ai_insights = ai_summary
-                             
-                             # If we just extracted text, save it too
-                             if not submission.analysis_result.document_text:
-                                 submission.analysis_result.document_text = doc_text
-                                 
-                             db.session.commit()
-                             current_app.logger.info("AI analysis auto-repaired successfully")
-                         else:
-                             current_app.logger.warning(f"AI repair failed: {ai_error}")
-                    else:
-                        current_app.logger.warning("Cannot repair AI: No document text available")
-
-        except Exception as e:
-            current_app.logger.error(f"AI Auto-repair failed: {e}")
 
         # Serialize submission using DTO
         from app.schemas.dto import SubmissionDetailDTO
@@ -584,13 +534,13 @@ def download_deadline_files(deadline_id):
         return jsonify({'error': 'Error preparing batch download'}), 500
 
 
-@dashboard_bp.route('/deadlines/<deadline_id>/students', methods=['GET'])
+@dashboard_bp.route('/students', methods=['GET'])
 @require_authentication()
-def get_deadline_students(deadline_id):
-    """Get list of students for a deadline folder"""
+def get_students():
+    """Get list of students for the system"""
     try:
         user_id = request.current_user.id
-        result, error = dashboard_service.get_students_for_deadline(deadline_id, user_id)
+        result, error = dashboard_service.get_students(user_id)
         
         if error:
             return jsonify({'error': error}), 404 if 'not found' in error else 500
@@ -601,10 +551,10 @@ def get_deadline_students(deadline_id):
         current_app.logger.error(f"Get students error: {e}")
         return jsonify({'error': 'Error loading students'}), 500
 
-@dashboard_bp.route('/deadlines/<deadline_id>/import-students', methods=['POST'])
+@dashboard_bp.route('/students/import', methods=['POST'])
 @require_authentication()
-def import_deadline_students(deadline_id):
-    """Import students into a deadline folder"""
+def import_students():
+    """Import students to the system"""
     try:
         user_id = request.current_user.id
         data = request.get_json()
@@ -612,7 +562,7 @@ def import_deadline_students(deadline_id):
         if not data or 'students' not in data:
             return jsonify({'error': 'No student data provided'}), 400
         
-        result, error = dashboard_service.import_students(deadline_id, user_id, data['students'])
+        result, error = dashboard_service.import_students(user_id, data['students'])
         
         if error:
             return jsonify({'error': error}), 400
@@ -625,13 +575,13 @@ def import_deadline_students(deadline_id):
     except Exception as e:
         current_app.logger.error(f"Import students error: {e}")
         return jsonify({'error': 'Error importing students'}), 500
-@dashboard_bp.route('/deadlines/<deadline_id>/students/<student_id>', methods=['DELETE'])
+@dashboard_bp.route('/students/<student_id>', methods=['DELETE'])
 @require_authentication()
-def delete_deadline_student(deadline_id, student_id):
-    """Delete a student record from a deadline folder"""
+def delete_student(student_id):
+    """Delete a student record from the system"""
     try:
         user_id = request.current_user.id
-        success, error = dashboard_service.delete_student(student_id, deadline_id, user_id)
+        success, error = dashboard_service.delete_student(student_id, user_id)
         
         if error:
             return jsonify({'error': error}), 404 if 'not found' in error else 400
@@ -644,10 +594,10 @@ def delete_deadline_student(deadline_id, student_id):
         current_app.logger.error(f"Delete student error: {e}")
         return jsonify({'error': 'Error deleting student record'}), 500
 
-@dashboard_bp.route('/deadlines/<deadline_id>/students/add', methods=['POST'])
+@dashboard_bp.route('/students/add', methods=['POST'])
 @require_authentication()
-def add_deadline_student(deadline_id):
-    """Manually add a single student to a deadline folder"""
+def add_student():
+    """Manually add a single student to the system"""
     try:
         user_id = request.current_user.id
         data = request.get_json()
@@ -655,7 +605,7 @@ def add_deadline_student(deadline_id):
         if not data or not data.get('student_id') or not data.get('last_name'):
             return jsonify({'error': 'Student ID and Last Name are required'}), 400
         
-        student, error = dashboard_service.add_student(deadline_id, user_id, data)
+        student, error = dashboard_service.add_student(user_id, data)
         
         if error:
             return jsonify({'error': error}), 400
@@ -669,9 +619,9 @@ def add_deadline_student(deadline_id):
         current_app.logger.error(f"Add student error: {e}")
         return jsonify({'error': 'Error adding student record'}), 500
 
-@dashboard_bp.route('/deadlines/<deadline_id>/students/<student_id>', methods=['PUT'])
+@dashboard_bp.route('/students/<student_id>', methods=['PUT'])
 @require_authentication()
-def update_deadline_student(deadline_id, student_id):
+def update_student(student_id):
     """Update an existing student record"""
     try:
         user_id = request.current_user.id
@@ -680,7 +630,7 @@ def update_deadline_student(deadline_id, student_id):
         if not data:
             return jsonify({'error': 'No update data provided'}), 400
         
-        student, error = dashboard_service.update_student(student_id, deadline_id, user_id, data)
+        student, error = dashboard_service.update_student(student_id, user_id, data)
         
         if error:
             return jsonify({'error': error}), 400

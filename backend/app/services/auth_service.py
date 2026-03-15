@@ -69,6 +69,8 @@ class AuthService:
             state = secrets.token_urlsafe(32)
             session['oauth_state'] = state
             session['user_type'] = user_type
+            # Bind user_type to state to avoid stale/default role fallback on callback.
+            session[f'oauth_user_type_{state}'] = user_type
             
             current_app.logger.info(f"OAuth URL generated. State saved: {state}")
             
@@ -96,6 +98,12 @@ class AuthService:
                 current_app.logger.error(f"State mismatch! received: {state}, saved: {saved_state}")
                 # For development, if session is lost, we might need to skip this OR fix the session
                 return None, "Invalid OAuth state"
+
+            user_type = session.pop(f'oauth_user_type_{state}', None) or session.get('user_type')
+            session.pop('user_type', None)
+
+            if user_type not in ['student', 'professor']:
+                return None, "Authentication session expired. Please sign in again from the Student Sign In page."
             
             # Clear state after verification
             session.pop('oauth_state', None)
@@ -138,22 +146,23 @@ class AuthService:
             picture = user_info.get('picture')
             google_id = user_info.get('sub')
             
-            user_type = session.get('user_type', 'professor')
-            
             # [NEW] Check for existing user role conflicts
             existing_user = User.query.filter_by(email=email).first()
-            if user_type == 'student' and existing_user and existing_user.role == UserRole.PROFESSOR:
-                return None, "Professor accounts cannot be used for student submissions. Please use your personal Gmail account that you listed in the excel class record."
+            if user_type == 'student':
+                normalized_email = (email or '').strip().lower()
+
+                if existing_user and existing_user.role == UserRole.PROFESSOR:
+                    return None, "Professor accounts cannot be used for student submissions. Please use your personal Gmail account listed in the class record."
 
             # Domain and Class Record validation logic
             if user_type == 'student':
                 if not email.endswith('@gmail.com'):
-                    return None, "Only personal Gmail accounts (@gmail.com) are allowed for student submissions. Please sign in with the gmail account that you listed in the excel class record."
+                    return None, "Only personal Gmail accounts (@gmail.com) are allowed for student submissions. Please use the Gmail account listed in the class record."
                 
                 # Check if this student email exists in ANY class record (Student table)
                 student_record = Student.query.filter_by(email=email).first()
                 if not student_record:
-                    return None, f"This Gmail address ({email}) is not associated with any student in our class records. Please use the Gmail account you listed in the excel class record."
+                    return None, f"This Gmail address ({email}) is not associated with any student in our class records. Please use the Gmail account listed in the class record."
                 
                 # If found, mark as registered if not already
                 if not student_record.is_registered:
@@ -194,7 +203,7 @@ class AuthService:
                      pass
             
             db.session.commit()
-            
+
             session_token = secrets.token_urlsafe(32)
             user_session = UserSession(
                 user_id=user.id,

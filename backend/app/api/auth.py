@@ -11,6 +11,7 @@ Implements SRS requirements:
 import os
 import json
 import hashlib
+import urllib.parse
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, current_app, session, redirect, url_for
 from google.oauth2 import id_token
@@ -82,10 +83,17 @@ def oauth_callback():
         if error:
             # Redirect to frontend with error
             frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:5173')
-            return redirect(f"{frontend_url}/auth/callback?error={error}")
+            encoded_error = urllib.parse.quote(str(error))
+            user_type = session.get('user_type')
+            if not user_type:
+                lowered = str(error).lower()
+                if 'class record' in lowered or 'gmail' in lowered or 'student' in lowered:
+                    user_type = 'student'
+                else:
+                    user_type = 'professor'
+            return redirect(f"{frontend_url}/auth/callback?error={encoded_error}&user_type={user_type}")
         
         # Redirect to frontend with session token and user data
-        import urllib.parse
         from app.schemas.dto import UserDTO
         
         frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:5173')

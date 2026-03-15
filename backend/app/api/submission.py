@@ -85,6 +85,8 @@ def get_token_info():
         token_record, error = validate_submission_token(token)
         if error:
             return jsonify({'error': error}), 403
+
+        professor_id = token_record.professor_id
         
         # Return deadline information
         response = {}
@@ -119,6 +121,8 @@ def get_student_status():
         token_record, error = validate_submission_token(token)
         if error:
             return jsonify({'error': error}), 403
+
+        professor_id = token_record.professor_id
             
         deadline_id = getattr(token_record, 'deadline_id', None)
         if not deadline_id:
@@ -126,7 +130,7 @@ def get_student_status():
             
         from app.models import Student, UserRole
         user = request.current_user
-        user_email = user.email
+        user_email = (user.email or '').strip().lower()
         
         # Check if the user is a professor viewing their own (or another) submission link
         if user.role == UserRole.PROFESSOR or user.role == "professor":
@@ -136,10 +140,16 @@ def get_student_status():
                 'message': 'You are currently logged in as a Professor.'
             }), 200
 
+        if not user_email:
+            return jsonify({
+                'is_registered': False,
+                'message': 'No Gmail account is associated with your current session.'
+            }), 200
+
         # Find if student is already linked via email (Case-insensitive)
         student = Student.query.filter(
-            Student.deadline_id == deadline_id,
-            db.func.lower(Student.email) == user_email.lower()
+            Student.professor_id == professor_id,
+            db.func.lower(Student.email) == user_email
         ).first()
         
         if student:
@@ -154,7 +164,11 @@ def get_student_status():
                 'is_registered': True,
                 'student_id': student.student_id,
                 'last_name': student.last_name,
-                'first_name': student.first_name
+                'first_name': student.first_name,
+                'course_year': student.course_year,
+                'team_code': student.team_code,
+                'email': student.email,
+                'name': f"{student.first_name} {student.last_name}".strip()
             }), 200
         else:
             return jsonify({
@@ -163,8 +177,13 @@ def get_student_status():
             }), 200
             
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f"Student status error: {e}")
-        return jsonify({'error': 'Failed to check registration status'}), 500
+        return jsonify({
+            'is_registered': False,
+            'error': 'Failed to check registration status',
+            'message': 'Unable to verify if your Gmail account is included in the class record right now. Please try again.'
+        }), 200
 
 @submission_bp.route('/student-register', methods=['POST'])
 @require_authentication()
@@ -184,8 +203,8 @@ def register_student():
         token_record, error = validate_submission_token(token)
         if error:
             return jsonify({'error': error}), 403
-            
-        deadline_id = getattr(token_record, 'deadline_id', None)
+
+        professor_id = token_record.professor_id
         
         from app.models import Student
         # Use provided email if available, otherwise fallback to session email
@@ -196,7 +215,10 @@ def register_student():
             return jsonify({'error': 'Only personal Gmail accounts (@gmail.com) are allowed for student submissions.'}), 400
         
         # 1. Check if email is already used in this class
-        existing_email = Student.query.filter_by(deadline_id=deadline_id, email=user_email).first()
+        existing_email = Student.query.filter(
+            Student.professor_id == professor_id,
+            db.func.lower(Student.email) == user_email
+        ).first()
         if existing_email:
             return jsonify({
                 'message': 'Account already registered',
@@ -204,8 +226,8 @@ def register_student():
                 'name': f"{existing_email.first_name} {existing_email.last_name}"
             }), 200
             
-        # 2. Check if student ID exists in the class record for this deadline
-        student = Student.query.filter_by(deadline_id=deadline_id, student_id=student_id).first()
+        # 2. Check if student ID exists in the professor's class record
+        student = Student.query.filter_by(professor_id=professor_id, student_id=student_id).first()
         
         if not student:
             return jsonify({'error': 'Your Student ID was not found in the class record for this folder. Please ensure you are enrolled or contact your professor.'}), 404
@@ -251,12 +273,14 @@ def get_student_links():
         
         if not student_records:
             return jsonify({'links': []}), 200
-            
-        deadline_ids = [s.deadline_id for s in student_records]
+
+        professor_ids = list({s.professor_id for s in student_records if s.professor_id})
+        if not professor_ids:
+            return jsonify({'links': []}), 200
         
         # Find active tokens for these deadlines
         tokens = SubmissionToken.query.filter(
-            SubmissionToken.deadline_id.in_(deadline_ids),
+            SubmissionToken.professor_id.in_(professor_ids),
             SubmissionToken.is_active == True,
             SubmissionToken.expires_at > datetime.utcnow()
         ).all()
@@ -314,7 +338,10 @@ def upload_file():
         student_name = request.form.get('student_name', '').strip()
 
         if user.role == UserRole.STUDENT:
-            student = Student.query.filter_by(deadline_id=deadline_id, email=user.email).first()
+            student = Student.query.filter(
+                Student.professor_id == professor_id,
+                db.func.lower(Student.email) == user.email.lower()
+            ).first()
             if not student:
                 return jsonify({'error': 'Account not authorized. Your Gmail account is not in the class record for this folder.'}), 403
             
@@ -458,6 +485,7 @@ def upload_file():
             # Extract metadata
             metadata, metadata_error = metadata_service.extract_docx_metadata(storage_path)
             if not metadata_error:
+
                 # Extract text
                 text, text_error = metadata_service.extract_document_text(storage_path)
                 if not text_error:
@@ -493,9 +521,7 @@ def upload_file():
                         # 1. Local NLP
                         local_results = nlp_service.perform_local_nlp_analysis(text)
                         
-                        # 2. AI Analysis (with Rubric if available)
-                        # Check for deadline and rubric
-                        rubric_data = None
+                        # 2. AI Analysis
                         context = {}
                         
                         if submission.deadline_id:
@@ -506,12 +532,9 @@ def upload_file():
                                     'assignment_type': deadline.assignment_type,
                                     'course_code': deadline.course_code
                                 }
-                                if deadline.rubric:
-                                    rubric_data = deadline.rubric.to_dict()
-                                    current_app.logger.info(f"Using rubric '{deadline.rubric.title}' for AI analysis")
                         
                         # Generate Summary & Rating
-                        ai_summary, ai_error = nlp_service.generate_ai_summary(text, context, rubric=rubric_data)
+                        ai_summary, ai_error = nlp_service.generate_ai_summary(text, context)
                         
                         if ai_error:
                             current_app.logger.warning(f"AI analysis warning: {ai_error}")
@@ -605,7 +628,10 @@ def submit_drive_link():
         student_name = data.get('student_name', '').strip()
 
         if user.role == UserRole.STUDENT:
-            student = Student.query.filter_by(deadline_id=deadline_id, email=user.email).first()
+            student = Student.query.filter(
+                Student.professor_id == professor_id,
+                db.func.lower(Student.email) == user.email.lower()
+            ).first()
             if not student:
                 return jsonify({'error': 'Account not authorized. Your Gmail account is not in the class record for this folder.'}), 403
             
@@ -768,7 +794,7 @@ def submit_drive_link():
             
             # Extract metadata (using external Google Drive metadata for more accuracy)
             doc_metadata, metadata_error = metadata_service.extract_docx_metadata(storage_path, external_metadata=metadata)
-            
+
             # Extract text
             text, text_error = metadata_service.extract_document_text(storage_path)
             if not text_error:
@@ -804,8 +830,7 @@ def submit_drive_link():
                     # 1. Local NLP
                     local_results = nlp_service.perform_local_nlp_analysis(text)
                     
-                    # 2. AI Analysis (with Rubric if available)
-                    rubric_data = None
+                    # 2. AI Analysis
                     context = {}
                     
                     if submission.deadline_id:
@@ -816,12 +841,9 @@ def submit_drive_link():
                                 'assignment_type': deadline.assignment_type,
                                 'course_code': deadline.course_code
                             }
-                            if deadline.rubric:
-                                rubric_data = deadline.rubric.to_dict()
-                                current_app.logger.info(f"Using rubric '{deadline.rubric.title}' for AI analysis (Drive)")
                     
                     # Generate Summary & Rating
-                    ai_summary, ai_error = nlp_service.generate_ai_summary(text, context, rubric=rubric_data)
+                    ai_summary, ai_error = nlp_service.generate_ai_summary(text, context)
                     
                     if ai_error:
                          current_app.logger.warning(f"AI analysis warning: {ai_error}")

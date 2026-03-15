@@ -14,16 +14,19 @@ class Student(BaseModel):
     first_name = db.Column(db.String(255), nullable=False)
     email = db.Column(db.String(255), nullable=True) # Linked after registration
     
+    course_year = db.Column(db.String(100), nullable=True)
+    team_code = db.Column(db.String(100), nullable=True)
+    
     # Registration status
     is_registered = db.Column(db.Boolean, default=False, nullable=False)
     registration_date = db.Column(db.DateTime, nullable=True)
     
-    # Foreign key to Deadline/Folder
-    deadline_id = db.Column(db.String(36), db.ForeignKey('deadlines.id', ondelete='CASCADE'), nullable=False)
+    # Foreign key to Professor (User)
+    professor_id = db.Column(db.String(36), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     
-    # Unique constraint per folder/deadline to prevent duplicate student IDs in the same class
+    # Unique constraint per professor to prevent duplicate student IDs
     __table_args__ = (
-        db.UniqueConstraint('student_id', 'deadline_id', name='_student_deadline_uc'),
+        db.UniqueConstraint('student_id', 'professor_id', name='_student_professor_uc'),
     )
     
     def __repr__(self):
@@ -36,8 +39,10 @@ class Student(BaseModel):
             'last_name': self.last_name,
             'first_name': self.first_name,
             'email': self.email,
+            'course_year': self.course_year,
+            'team_code': self.team_code,
             'is_registered': self.is_registered,
             'registration_date': self.registration_date.isoformat() if self.registration_date else None,
-            'deadline_id': self.deadline_id,
+            'professor_id': self.professor_id,
             'status': 'Registered' if self.is_registered else 'Pending'
         }

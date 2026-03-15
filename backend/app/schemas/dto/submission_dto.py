@@ -72,6 +72,11 @@ class SubmissionListDTO:
         created_at_iso = submission.created_at.isoformat()
         if not created_at_iso.endswith('Z') and '+' not in created_at_iso:
             created_at_iso += 'Z'
+
+        last_modified = submission.updated_at if submission.updated_at else submission.created_at
+        last_modified_iso = last_modified.isoformat() if last_modified else None
+        if last_modified_iso and not last_modified_iso.endswith('Z') and '+' not in last_modified_iso:
+            last_modified_iso += 'Z'
         
         # Get word count from analysis result if available
         word_count = None
@@ -84,11 +89,14 @@ class SubmissionListDTO:
             'job_id': submission.job_id,
             'file_name': submission.file_name,
             'original_filename': submission.original_filename,
+            'deadline_id': submission.deadline_id,
+            'deadline_title': submission.deadline.title if hasattr(submission, 'deadline') and submission.deadline and submission.deadline.title else None,
             'student_id': submission.student_id,
             'student_name': submission.student_name,
             'status': submission.status.value if hasattr(submission.status, 'value') else submission.status,
             'is_late': submission.is_late if hasattr(submission, 'is_late') else False,
             'created_at': created_at_iso,
+            'last_modified': last_modified_iso,
             'file_size': submission.file_size,
             'submission_type': submission.submission_type
         }
