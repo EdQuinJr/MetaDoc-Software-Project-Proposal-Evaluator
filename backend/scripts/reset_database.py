@@ -12,7 +12,6 @@ Usage:
 
 import os
 import sys
-import time
 
 # Add parent directory to path so we can import app
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -47,9 +46,6 @@ if os.path.exists(DB_PATH):
         sys.exit(1)
 else:
     print("No existing database found")
-
-# Wait a moment
-time.sleep(1)
 
 # Create fresh database
 print("\nCreating fresh database...")

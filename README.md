@@ -20,13 +20,13 @@ MetaDoc is a comprehensive **document analysis and evaluation platform** designe
 - Identity deduplication with smart name/email normalization
 - Real-time NLP analysis (readability, sentiment, named entities)
 - Google Gemini AI-powered qualitative evaluation
-- Custom rubric-based assessment
+- Rule-based timeliness and contribution insights
 
 ### 👨‍🏫 **Professor Dashboard**
 - Real-time system overview and statistics
-- Submission management and organization
+- Submission and deliverable management
 - Comprehensive report generation (PDF/CSV)
-- Rubric creation and customization
+- Class Record management (student and team data)
 - Batch operations for submissions
 
 ---
@@ -157,7 +157,7 @@ backend/
 ├── app/
 │   ├── api/              # Route handlers (auth, submission, analysis, etc.)
 │   ├── services/         # Business logic (12 service classes)
-│   ├── models/           # Database models (User, Submission, Rubric, etc.)
+│   ├── models/           # Database models (User, Submission, Deadline, Analysis, etc.)
 │   ├── schemas/          # Request/response DTOs
 │   └── core/             # Config, extensions, utilities
 ├── scripts/              # Admin tools (reset DB, migrations)
@@ -198,10 +198,10 @@ frontend/metadoc/src/
 | **Authentication** | `POST /api/v1/auth/login` | POST |
 | **Dashboard** | `GET /api/v1/dashboard/overview` | GET |
 | **Submissions** | `POST /api/v1/submission/drive-link` | POST |
+| **Deadlines** | `GET /api/v1/dashboard/deadlines` | GET |
 | **Analysis** | `POST /api/v1/insights/analyze/:id` | POST |
 | **Metadata** | `GET /api/v1/metadata/result/:id` | GET |
 | **Reports** | `GET /api/v1/reports/generate/:id` | GET |
-| **Rubrics** | `POST /api/v1/rubrics/` | POST |
 
 See [backend/README.md](backend/README.md) for complete API documentation.
 
@@ -233,11 +233,11 @@ See [backend/README.md](backend/README.md) for complete API documentation.
 - Include analysis results and metrics
 - Support batch operations
 
-### 5. **Rubric-Based Evaluation**
-- Create custom evaluation criteria
-- Define evaluation levels
-- Apply to submissions
-- Track scoring and feedback
+### 5. **Deadline & Submission Intelligence**
+- Classify submissions as on-time or late
+- Monitor upcoming deliverables and active deadlines
+- Review per-submission metadata and contribution snapshots
+- Track submission health across overview, deliverables, and reports
 
 ---
 
@@ -347,297 +347,3 @@ See LICENSE file for details.
 ---
 
 **Ready to get started?** → 👉 [QUICK_START.md](QUICK_START.md)
-- **Submission details** - View complete analysis results
-- **Individual file management** - Delete specific submissions
-- **Bulk operations** - Delete entire folders with all submissions
-
-### 🔐 Authentication & Security
-- **Session-based authentication** - Secure login system
-- **User registration** - Email and password registration
-- **Protected routes** - Role-based access control
-- **Token validation** - Secure submission links with expiration
-
-### 🎨 Modern UI/UX
-- **Responsive design** - Works on desktop, tablet, and mobile
-- **Clean interface** - Simple black icons, no clutter
-- **Visual feedback** - Success messages and loading states
-- **Smooth redirects** - Automatic navigation after actions
-
-## 🔧 Development
-
-### Project Structure
-
-```
-MetaDoc-Software-Project-Proposal-Evaluator/
-├── backend/
-│   ├── app/
-│   │   ├── api/                    # API route handlers
-│   │   │   ├── auth.py            # Authentication endpoints
-│   │   │   ├── dashboard.py       # Dashboard endpoints
-│   │   │   ├── submission.py      # Submission endpoints
-│   │   │   └── metadata.py        # Metadata endpoints
-│   │   ├── services/              # Business logic layer
-│   │   │   ├── auth_service.py
-│   │   │   ├── dashboard_service.py
-│   │   │   ├── submission_service.py
-│   │   │   └── metadata_service.py
-│   │   ├── models/                # Database models
-│   │   │   ├── user.py
-│   │   │   ├── submission.py
-│   │   │   ├── deadline.py
-│   │   │   └── analysis.py
-│   │   ├── schemas/               # Data transfer objects
-│   │   │   └── dto/
-│   │   ├── core/                  # Core configurations
-│   │   │   ├── extensions.py     # Flask extensions
-│   │   │   └── config.py         # App configuration
-│   │   └── utils/                 # Utility functions
-│   ├── scripts/                   # Database and utility scripts
-│   │   ├── reset_database.py
-│   │   └── create_test_user.py
-│   ├── uploads/                   # Uploaded files storage
-│   ├── temp/                      # Temporary file storage
-│   ├── requirements.txt           # Python dependencies
-│   ├── run.py                     # Application entry point
-│   └── metadoc.db                 # SQLite database (auto-created)
-├── frontend/
-│   └── metadoc/
-│       ├── src/
-│       │   ├── pages/             # Page components
-│       │   │   ├── TokenBasedSubmission.jsx    # Token-based submission form
-│       │   │   ├── SubmissionDetailView.jsx    # Submission details
-│       │   │   ├── Dashboard.jsx               # Professor dashboard
-│       │   │   ├── Folder.jsx                  # Folder view
-│       │   │   ├── Deadlines.jsx               # Deadline management
-│       │   │   ├── Login.jsx                   # Login page
-│       │   │   └── Register.jsx                # Registration page
-│       │   ├── components/        # Reusable components
-│       │   ├── services/          # API service layer
-│       │   │   └── api.js
-│       │   ├── contexts/          # React contexts
-│       │   │   └── AuthContext.jsx
-│       │   ├── styles/            # CSS stylesheets
-│       │   └── App.jsx            # Main app component
-│       ├── vite.config.js         # Vite configuration
-│       └── package.json           # Node dependencies
-└── README.md                      # This file
-```
-
-### Development Workflow
-
-**Starting the Application:**
-
-```bash
-# Terminal 1 - Backend
-cd backend
-.\venv\Scripts\Activate.ps1  # Windows
-python run.py
-
-# Terminal 2 - Frontend
-cd frontend/metadoc
-npm run dev
-```
-
-**Resetting the Database:**
-
-```bash
-cd backend
-python scripts/reset_database.py
-```
-
-**Creating Test Users:**
-
-```bash
-cd backend
-python scripts/create_test_user.py
-```
-
-## 🐛 Troubleshooting
-
-### Backend Won't Start
-
-**Issue**: `ModuleNotFoundError` or import errors
-
-**Solution**: 
-```bash
-# Ensure virtual environment is activated
-.\venv\Scripts\Activate.ps1  # Windows
-source venv/bin/activate      # Linux/Mac
-
-# Reinstall dependencies
-pip install -r requirements.txt
-```
-
-### Frontend CORS Errors
-
-**Issue**: `Failed to fetch` or CORS errors in browser console
-
-**Solution**: 
-1. Ensure backend is running on `http://localhost:5000`
-2. Check `vite.config.js` proxy configuration
-3. Clear browser cache and restart frontend
-
-### Database Locked Error
-
-**Issue**: `database is locked` error
-
-**Solution**: 
-```bash
-# Close all Python processes
-# On Windows Task Manager, end all python.exe processes
-# Then restart the backend
-```
-
-### Port Already in Use
-
-**Issue**: `Address already in use` error
-
-**Solution**:
-```bash
-# Windows - Kill process on port 5000
-netstat -ano | findstr :5000
-taskkill /PID <PID> /F
-
-# Linux/Mac
-lsof -ti:5000 | xargs kill -9
-```
-
-### Login Not Working
-
-**Issue**: Login fails or session not persisting
-
-**Solution**:
-1. Clear browser cookies and localStorage
-2. Check backend logs for errors
-3. Verify user exists in database
-4. Reset database and create new test user
-
-## 📱 User Guide
-
-### For Professors
-
-1. **Register/Login**
-   - Navigate to `http://localhost:5173`
-   - Register with email and password
-   - Login to access dashboard
-
-2. **Create Deadline**
-   - Go to "Deadline Management"
-   - Click "Create New Deadline"
-   - Fill in title, description, and deadline date
-   - Click "Create Deadline"
-
-3. **Generate Submission Link**
-   - In deadline card, click "Generate Link"
-   - Copy the submission link
-   - Share with students
-
-4. **View Submissions**
-   - Go to "Folders"
-   - Click on a deadline folder
-   - View all submitted files
-   - Click on a file to see detailed analysis
-
-5. **Delete Submissions**
-   - Click trash icon next to a file to delete it
-   - Click folder delete to remove entire deadline (deletes all files inside)
-
-### For Students
-
-1. **Access Submission Link**
-   - Click the unique link provided by your professor.
-   - Login with your **Gmail** account to verify your authorization.
-
-2. **Verify Whitelist Status**
-   - If your email is in the Class Record for this deadline, the form will unlock.
-   - If not, you will see an "Account Not Authorized" message.
-
-3. **Submit via Google Drive**
-   - Paste your Google Drive link into the submission box.
-   - **Important**: Ensure the document is shared with the MetaDoc Service Account if prompted.
-   - Click "Validate & Submit".
-
-4. **Review Status**
-   - Once submitted, the system will immediately begin metadata extraction and NLP analysis.
-   - You will see a "Submission Successful" message once the job is enqueued.
-
-3. **Submission Requirements**
-   - File must be in DOCX format
-   - File size must be under 50MB
-   - File must contain actual content (not empty)
-
-## 🔌 API Endpoints
-
-### Authentication
-- `POST /api/v1/auth/register` - Register new user
-- `POST /api/v1/auth/login-basic` - Login with email/password
-- `POST /api/v1/auth/logout` - Logout current session
-- `GET /api/v1/auth/validate` - Validate session
-- `POST /api/v1/auth/generate-submission-token` - Generate submission link
-
-### Dashboard
-- `GET /api/v1/dashboard/overview` - Get dashboard statistics
-- `GET /api/v1/dashboard/submissions` - List all submissions
-- `GET /api/v1/dashboard/submissions/:id` - Get submission details
-- `DELETE /api/v1/dashboard/submissions/:id` - Delete submission
-- `GET /api/v1/dashboard/deadlines` - List deadlines
-- `POST /api/v1/dashboard/deadlines` - Create deadline
-- `PUT /api/v1/dashboard/deadlines/:id` - Update deadline
-- `DELETE /api/v1/dashboard/deadlines/:id` - Delete deadline (and all submissions)
-
-### Submission
-- `GET /api/v1/submission/token-info` - Get deadline info from token
-- `POST /api/v1/submission/upload` - Upload document
-- `GET /api/v1/submission/status/:id` - Check submission status
-
-### Metadata
-- `GET /api/v1/metadata/result/:id` - Get analysis results
-
-## 🤝 Contributing
-
-### For Team Members
-
-1. **Before starting work**:
-   - Pull latest changes: `git pull`
-   - Activate virtual environment
-   - Install any new dependencies
-
-2. **Before committing**:
-   - Test your changes locally
-   - Update documentation if needed
-   - Don't commit `.env` files
-   - Update `requirements.txt` if you added packages
-
-3. **Code style**:
-   - Follow PEP 8 for Python
-   - Use ESLint for JavaScript/React
-   - Add comments for complex logic
-   - Write descriptive commit messages
-
-## 📄 License
-
-This project is developed for Cebu Institute of Technology – University as part of the capstone project requirements.
-
-## 👥 Development Team
-
-- **Edgar B. Quiandao Jr.** - Backend Developer
-- **Paul G. Abellana** - Backend Developer
-- **Miguel Ray A. Veloso** - Frontend Developer
-- **Mark Christian Q. Garing** - Full Stack Developer
-
-**Advisers**: Mr. Ralph Laviste & Dr. Cheryl Pantaleon
-
----
-
-## 🆘 Need Help?
-
-- **Setup Issues**: See [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md)
-- **API Questions**: See [backend/README.md](backend/README.md)
-- **Bug Reports**: Contact the development team
-- **Feature Requests**: Discuss with advisers
-
----
-
-**Version**: 1.0.0  
-**Last Updated**: December 2025  
-**Institution**: Cebu Institute of Technology - University
