@@ -106,15 +106,6 @@ DATABASE_URL=sqlite:///metadoc.db
 
 ---
 
-## 📌 Current Workflow Notes
-
-- Submissions are handled through Google Drive document links (DOCX workflow).
-- Reports page is an overview of all submitted files in one glance.
-- In submission details, the "View File" button opens the original Google Drive file.
-- Current UI documentation focuses on review workflows (not CSV export workflow).
-
----
-
 ## 🆘 Quick Troubleshooting
 
 | Problem | Solution |

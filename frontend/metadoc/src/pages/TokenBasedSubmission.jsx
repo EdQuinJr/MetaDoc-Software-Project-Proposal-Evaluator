@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Card from '../components/common/Card/Card';
 import Input from '../components/common/Input/Input';
 import Button from '../components/common/Button/Button';
-import logoImg from '../assets/images/logo.png';
+import logoImg from '../assets/images/MainLogo.png';
 import '../styles/TokenBasedSubmission.css';
 
 

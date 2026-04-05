@@ -4,7 +4,7 @@ import { FileText, Shield, BarChart3, User, Mail, Lock, FolderOpen, ArrowRight, 
 import Input from '../components/common/Input/Input';
 import Button from '../components/common/Button/Button';
 import citLogo from '../assets/images/cit_logo.png';
-import metaDocLogo from '../assets/images/logo.png';
+import metaDocLogo from '../assets/images/MainLogo.png';
 import '../styles/Register.css';
 
 const Register = () => {

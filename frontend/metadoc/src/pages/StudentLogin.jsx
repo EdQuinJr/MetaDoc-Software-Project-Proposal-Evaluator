@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { FileText, Users, LogIn, CheckCircle } from 'lucide-react';
 import Card from '../components/common/Card/Card';
 import Button from '../components/common/Button/Button';
-import logoImg from '../assets/images/logo.png';
+import logoImg from '../assets/images/MainLogo.png';
 import citLogo from '../assets/images/cit_logo.png';
 import '../styles/Login.css'; // Reuse login styles
 

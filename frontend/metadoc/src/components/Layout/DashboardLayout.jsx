@@ -20,7 +20,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
-import logo from '../../assets/images/logo.png';
+import logo from '../../assets/images/MainLogo.png';
 import citLogo from '../../assets/images/cit_logo.png';
 import quindaoProfile from '../../assets/images/members/Quindao_Profile.jpg';
 import abellanaProfile from '../../assets/images/members/Abellana_Profile.jpg';
@@ -70,10 +70,10 @@ const DashboardLayout = ({ children }) => {
     },
     {
       name: 'Abellana',
-      role: 'Project Manager',
-      Icon: ClipboardList,
+      role: 'NLP & Backend',
+      Icon: Database,
       photo: abellanaProfile,
-      description: 'Manages documentation flow, task prioritization, and team communication. Supports risk mitigation and helps maintain quality and progress visibility across all development phases.',
+      description: 'Specializes in Natural Language Processing and backend architecture. Responsible for developing data models, APIs, and machine learning integrations for automated document evaluation.',
     },
     {
       name: 'Veloso',
