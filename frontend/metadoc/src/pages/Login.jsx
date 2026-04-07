@@ -26,6 +26,7 @@ const Login = () => {
   const [success, setSuccess] = useState(null);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [selectedDeveloper, setSelectedDeveloper] = useState(null);
+  const [selectedFeature, setSelectedFeature] = useState(null);
 
   const teamMembers = [
     {
@@ -51,6 +52,30 @@ const Login = () => {
       role: 'Project Manager',
       photo: quindaoProfile,
       description: 'Manages documentation flow, task prioritization, and team communication. Supports risk mitigation and helps maintain quality and progress visibility across all development phases.'
+    }
+  ];
+
+  const systemFeatures = [
+    {
+      id: 'doc-analysis',
+      title: 'Document Analysis',
+      subtitle: 'Automated metadata extraction and content validation',
+      image: logo3Img,
+      description: 'MetaDoc performs deep structural analysis of uploaded Software Project Proposals. It automatically reads and evaluates document sections, checking for compliance with standard academic formatting and necessary prerequisite sections before further review.'
+    },
+    {
+      id: 'insights',
+      title: 'Intelligent Insights',
+      subtitle: 'Rule-based heuristics and NLP-powered analysis',
+      image: logo2Img,
+      description: 'Leveraging Natural Language Processing and predefined rubrics, the system provides contextual feedback on the novelty, clarity, and viability of the project scope. It highlights areas of improvement immediately, accelerating the evaluation timeline.'
+    },
+    {
+      id: 'secure',
+      title: 'Secure & Compliant',
+      subtitle: 'Data Privacy Act 2012 compliant with OAuth 2.0',
+      image: logo1Img,
+      description: 'Security is a top priority. MetaDoc strictly adheres to the Data Privacy Act of 2012, utilizing Google OAuth 2.0 to securely access student submissions from Drive, ensuring that academic records and sensitive data remain protected.'
     }
   ];
 
@@ -186,6 +211,28 @@ const Login = () => {
         </div>
       )}
 
+      {selectedFeature && (
+        <div className="feature-modal-overlay" onClick={() => setSelectedFeature(null)}>
+          <div className="feature-modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="feature-modal-close" onClick={() => setSelectedFeature(null)}>
+              <X size={24} />
+            </button>
+            <div className="feature-modal-header">
+              <div className="feature-modal-icon-container">
+                <img src={selectedFeature.image} alt={selectedFeature.title} />
+              </div>
+              <div>
+                <h2>{selectedFeature.title}</h2>
+                <span className="feature-modal-subtitle">{selectedFeature.subtitle}</span>
+              </div>
+            </div>
+            <div className="feature-modal-body">
+              <p>{selectedFeature.description}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="login-container">
         <div className="login-left">
           <div className="brand-header">
@@ -204,35 +251,22 @@ const Login = () => {
           </div>
 
           <div className="features-list">
-            <div className="feature-item">
-              <div className="feature-icon" style={{ backgroundColor: 'white', padding: '6px', overflow: 'hidden', borderRadius: '12px' }}>
-                <img src={logo3Img} alt="Document Analysis" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            {systemFeatures.map(feature => (
+              <div 
+                key={feature.id} 
+                className="feature-item cursor-pointer" 
+                onClick={() => setSelectedFeature(feature)}
+                title="Click to learn more"
+              >
+                <div className="feature-icon feature-icon-clickable" style={{ backgroundColor: 'white', padding: '6px', overflow: 'hidden', borderRadius: '12px' }}>
+                  <img src={feature.image} alt={feature.title} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                </div>
+                <div className="feature-content">
+                  <h3>{feature.title}</h3>
+                  <p>{feature.subtitle}</p>
+                </div>
               </div>
-              <div className="feature-content">
-                <h3>Document Analysis</h3>
-                <p>Automated metadata extraction and content validation</p>
-              </div>
-            </div>
-
-            <div className="feature-item">
-              <div className="feature-icon" style={{ backgroundColor: 'white', padding: '6px', overflow: 'hidden', borderRadius: '12px' }}>
-                <img src={logo2Img} alt="Intelligent Insights" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-              </div>
-              <div className="feature-content">
-                <h3>Intelligent Insights</h3>
-                <p>Rule-based heuristics and NLP-powered analysis</p>
-              </div>
-            </div>
-
-            <div className="feature-item">
-              <div className="feature-icon" style={{ backgroundColor: 'white', padding: '6px', overflow: 'hidden', borderRadius: '12px' }}>
-                <img src={logo1Img} alt="Secure & Compliant" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-              </div>
-              <div className="feature-content">
-                <h3>Secure & Compliant</h3>
-                <p>Data Privacy Act 2012 compliant with OAuth 2.0</p>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
