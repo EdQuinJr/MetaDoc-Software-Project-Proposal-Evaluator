@@ -79,6 +79,7 @@ export const submissionAPI = {
   getStatus: (jobId) => api.get(`/submission/status/${jobId}`),
   validateDriveLink: (driveLink) => api.post('/submission/validate-link', { drive_link: driveLink }),
   getStudentStatus: (token) => api.get(`/submission/student-status`, { params: { token } }),
+  getTokenInfo: (token) => api.get(`/submission/token-info`, { params: { token } }),
   registerStudent: (data) => api.post('/submission/student-register', data),
   getStudentLinks: () => api.get('/submission/student-links'),
   getGeneratedLinks: () => api.get('/submission/generated-links'),

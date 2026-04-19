@@ -303,6 +303,7 @@ const Deliverable = () => {
     try {
       if (editingFolder) {
         await dashboardAPI.updateDeadline(editingFolder.id, payload);
+        setShowSuccessModal(true);
       } else {
         await dashboardAPI.createDeadline(payload);
         setShowSuccessModal(true);
@@ -1151,7 +1152,7 @@ const Deliverable = () => {
               <h2>Success!</h2>
             </div>
             <div className="modal-body">
-              <p>Deliverable has been successfully created.</p>
+              <p>Deliverable has been successfully saved.</p>
             </div>
             <div className="modal-footer">
               <button className="btn btn-primary" onClick={() => setShowSuccessModal(false)}>

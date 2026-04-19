@@ -47,7 +47,7 @@ const TokenBasedSubmission = () => {
       if (token) {
         // 1. Fetch Deadline Info
         try {
-          const response = await axios.get(`/api/v1/submission/token-info?token=${token}`);
+          const response = await submissionAPI.getTokenInfo(token);
           if (response.data) {
             setDeadlineInfo(response.data);
           }
