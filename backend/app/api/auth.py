@@ -50,6 +50,9 @@ def initiate_login():
         
         if error:
             return jsonify({'error': error}), 500
+            
+        if request.args.get('mode') == 'direct':
+            return redirect(auth_url)
         
         return jsonify({
             'auth_url': auth_url,

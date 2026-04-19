@@ -70,11 +70,12 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('user_type', userType);
       localStorage.setItem('auth_provider', provider);
 
-      const response = await authAPI.initiateLogin(userType, provider);
-      if (response.data.auth_url) {
-        // Redirect to OAuth provider
-        window.location.href = response.data.auth_url;
-      }
+      // IMPORTANT SECURITY FIX: Navigate via top-level context instead of Axios/XHR.
+      // This forces the browser into a first-party context on the backend domain,
+      // guaranteeing that High-Security Chrome/Safari accept the OAuth State Cookie.
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+      window.location.href = `${baseUrl}/auth/login?user_type=${userType}&provider=${provider}&mode=direct`;
+      
     } catch (error) {
       console.error('Login initiation failed:', error);
       throw error;
