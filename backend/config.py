@@ -78,7 +78,7 @@ class Config:
     REDIS_URL = os.environ.get('REDIS_URL') or 'redis://localhost:6379/0'
     
     # Institution Configuration
-    ALLOWED_EMAIL_DOMAINS = os.environ.get('ALLOWED_EMAIL_DOMAINS', 'cit.edu').split(',')
+    ALLOWED_EMAIL_DOMAINS = os.environ.get('ALLOWED_EMAIL_DOMAINS', 'gmail.com').split(',')
     INSTITUTION_NAME = os.environ.get('INSTITUTION_NAME') or 'Cebu Institute of Technology - University'
     
     # NLP Configuration
