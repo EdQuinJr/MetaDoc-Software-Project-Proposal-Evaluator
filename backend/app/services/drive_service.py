@@ -816,6 +816,26 @@ class DriveService:
 
                         
 
+            # --- Loophole Breaking: Spammy Edit Detection ---
+            total_revs = sum(s['revisionCount'] for s in sessions)
+            total_mins = sum(s['minutes'] for s in sessions)
+            avg_rate = total_revs / total_mins if total_mins > 0 else 0
+            
+            suspicious_flags = []
+            if total_revs > 50 and avg_rate > 10:
+                suspicious_flags.append("High Frequency Edits (Spamming Risk)")
+            
+            short_sessions = [s for s in sessions if s['minutes'] < 2]
+            if len(sessions) > 3 and len(short_sessions) / len(sessions) > 0.7:
+                suspicious_flags.append("Short-Burst Attendance (Gaming Risk)")
+            
+            if total_revs > 100 and total_mins < 5:
+                suspicious_flags.append("Rapid Revision Spiking")
+                
+            item['suspicious_activity'] = suspicious_flags
+            item['edits'] = total_revs
+            item['sessions'] = len(sessions)
+            # -----------------------------------------------
 
             # Simplified contributor stats (metrics removed as requested)
             item['date'] = sessions[-1]['end'].isoformat() + 'Z' if sessions else None
@@ -823,16 +843,16 @@ class DriveService:
             
             contributors.append(item)
 
-        # Strip all metrics as requested
+        # Strip all metrics as requested (Keep suspicious_activity for the AI/loophole breaking)
         for item in contributors:
+            # We preserve 'edits', 'sessions', and 'suspicious_activity' for AI context
             item.pop('activeEditingMinutes', None)
             item.pop('sessionCount', None)
             item.pop('contributionPercent', None)
             item.pop('workStatus', None)
             item.pop('heuristics', None)
             item.pop('points', None)
-            item.pop('revisionCount', None)
-            item.pop('sessions', None)
+            item.pop('sessions_list', None) # Custom sessions list pop
 
         contributors.sort(key=lambda c: c.get('name', ''), reverse=False)
         
