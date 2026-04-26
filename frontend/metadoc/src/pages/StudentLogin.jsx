@@ -88,15 +88,6 @@ const StudentLogin = () => {
                         <div className="university-footer-stack">
                             <span>Cebu Institute of Technology - University</span>
                             <span className="university-footer-version">MetaDoc V1.0</span>
-                            <div className="login-legal-links">
-                                <Link to="/privacy-policy" className="login-legal-button">
-                                    Privacy Policy
-                                </Link>
-                                <span aria-hidden="true">•</span>
-                                <Link to="/terms-of-service" className="login-legal-button">
-                                    Terms of Service
-                                </Link>
-                            </div>
                         </div>
                     </div>
 
@@ -216,15 +207,6 @@ const StudentLogin = () => {
                 <div className="university-footer-stack">
                     <span>Cebu Institute of Technology - University</span>
                     <span className="university-footer-version">MetaDoc V1.0</span>
-                    <div className="login-legal-links">
-                        <Link to="/privacy-policy" className="login-legal-button">
-                            Privacy Policy
-                        </Link>
-                        <span aria-hidden="true">•</span>
-                        <Link to="/terms-of-service" className="login-legal-button">
-                            Terms of Service
-                        </Link>
-                    </div>
                 </div>
             </div>
 

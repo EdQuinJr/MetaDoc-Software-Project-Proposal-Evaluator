@@ -28,6 +28,8 @@ try:
 except ImportError:
     magic = None
 import uuid
+import threading
+from threading import Thread
 
 from app.core.extensions import db
 from app.models import Submission, SubmissionToken, SubmissionStatus, Deadline, UserRole
@@ -43,6 +45,96 @@ submission_bp = Blueprint('submission', __name__)
 # Initialize services
 submission_service = SubmissionService()
 drive_service = DriveService()
+
+def perform_full_analysis(app, submission_id):
+    """Perform metadata extraction and AI analysis in the background."""
+    with app.app_context():
+        try:
+            from app.models import Submission, AnalysisResult, SubmissionStatus
+            from app.api.metadata import metadata_service
+            from app.api.nlp import get_nlp_service
+            
+            submission = Submission.query.get(submission_id)
+            if not submission:
+                return
+                
+            storage_path = submission.file_path
+            if not storage_path or not os.path.exists(storage_path):
+                app.logger.error(f"Storage path not found for submission {submission_id}")
+                submission.status = SubmissionStatus.FAILED
+                db.session.commit()
+                return
+
+            # 1. Extract local metadata & text
+            metadata, metadata_error = metadata_service.extract_docx_metadata(storage_path)
+            text, text_error = metadata_service.extract_document_text(storage_path)
+            
+            if metadata_error or text_error:
+                app.logger.error(f"Metadata/Text extraction failed: {metadata_error or text_error}")
+                submission.status = SubmissionStatus.FAILED
+                db.session.commit()
+                return
+                
+            content_stats = metadata_service.compute_content_statistics(text)
+            is_complete, warnings = metadata_service.validate_document_completeness(content_stats, text)
+            
+            # 2. Save local analysis
+            analysis = AnalysisResult.query.filter_by(submission_id=submission.id).first()
+            if not analysis:
+                analysis = AnalysisResult(submission_id=submission.id)
+                db.session.add(analysis)
+            
+            analysis.document_metadata = metadata
+            analysis.content_statistics = content_stats
+            analysis.document_text = text
+            analysis.is_complete_document = is_complete
+            analysis.validation_warnings = warnings
+            db.session.commit()
+            
+            # 3. AI Analysis
+            nlp_service = get_nlp_service()
+            local_results = nlp_service.perform_local_nlp_analysis(text)
+            
+            context = {}
+            if submission.deadline_id:
+                from app.models import Deadline
+                deadline = Deadline.query.get(submission.deadline_id)
+                if deadline:
+                    context = {
+                        'assignment_type': deadline.assignment_type,
+                        'course_code': deadline.course_code
+                    }
+            
+            ai_summary, ai_error = nlp_service.generate_ai_summary(text, context)
+            
+            consolidated_results = local_results
+            if hasattr(nlp_service, 'consolidate_nlp_results'):
+                consolidated_results, _ = nlp_service.consolidate_nlp_results(local_results, ai_summary)
+                
+            analysis.nlp_results = consolidated_results
+            if ai_summary:
+                analysis.ai_summary = ai_summary.get('summary')
+                analysis.ai_insights = ai_summary
+                
+            if 'readability' in local_results and local_results['readability']:
+                analysis.flesch_kincaid_score = local_results['readability'].get('grade_level')
+                analysis.readability_grade = local_results['readability'].get('reading_level')
+                
+            submission.status = SubmissionStatus.COMPLETED
+            submission.processing_completed_at = datetime.utcnow()
+            db.session.commit()
+            app.logger.info(f"Background analysis completed for submission {submission_id}")
+            
+        except Exception as e:
+            app.logger.error(f"Background analysis failed for submission {submission_id}: {e}")
+            try:
+                db.session.rollback()
+                submission = Submission.query.get(submission_id)
+                if submission:
+                    submission.status = SubmissionStatus.FAILED
+                    db.session.commit()
+            except:
+                pass
 
 
 def normalize_semester(raw_semester):
@@ -516,8 +608,8 @@ def upload_file():
             
             # Return error with details about the existing submission
             return jsonify({
-                'error': 'This file has already been submitted',
-                'message': f'A file with identical content was already submitted on {existing_submission.created_at.strftime("%Y-%m-%d %H:%M:%S")}',
+                'error': 'Duplicate file submission detected',
+                'message': f'You have already submitted this specific file ("{existing_submission.original_filename}") on {existing_submission.created_at.strftime("%Y-%m-%d %H:%M:%S")}. To submit a new version, please ensure the file content has changed.',
                 'existing_submission': {
                     'job_id': existing_submission.job_id,
                     'submitted_at': existing_submission.created_at.isoformat(),
@@ -574,102 +666,18 @@ def upload_file():
                 pass
             return jsonify({'error': error}), 500
         
-        # Trigger automatic analysis
-        try:
-            from app.api.metadata import metadata_service
-            
-            # Update status to processing
-            submission.status = SubmissionStatus.PROCESSING
-            submission.processing_started_at = datetime.utcnow()
-            db.session.commit()
-            
-            # Extract metadata
-            metadata, metadata_error = metadata_service.extract_docx_metadata(storage_path)
-            if not metadata_error:
-
-                # Extract text
-                text, text_error = metadata_service.extract_document_text(storage_path)
-                if not text_error:
-                    # Compute statistics
-                    content_stats = metadata_service.compute_content_statistics(text)
-                    is_complete, warnings = metadata_service.validate_document_completeness(content_stats, text)
-                    
-                    # Create or update analysis result
-                    from app.models import AnalysisResult
-                    analysis = AnalysisResult.query.filter_by(submission_id=submission.id).first()
-                    if not analysis:
-                        analysis = AnalysisResult(submission_id=submission.id)
-                        db.session.add(analysis)
-                    
-                    analysis.document_metadata = metadata
-                    analysis.content_statistics = content_stats
-                    analysis.document_text = text
-                    analysis.is_complete_document = is_complete
-                    analysis.validation_warnings = warnings
-                    
-                    # Mark as completed
-                    submission.status = SubmissionStatus.COMPLETED
-                    submission.processing_completed_at = datetime.utcnow()
-                    db.session.commit()
-                    
-                    current_app.logger.info(f"Analysis completed for submission {submission.id}")
-
-                    # [INTEGRATION] Trigger AI Analysis IMMEDIATELY
-                    try:
-                        from app.api.nlp import get_nlp_service
-                        nlp_service = get_nlp_service()
-                        
-                        # 1. Local NLP
-                        local_results = nlp_service.perform_local_nlp_analysis(text)
-                        
-                        # 2. AI Analysis
-                        context = {}
-                        
-                        if submission.deadline_id:
-                            from app.models import Deadline
-                            deadline = Deadline.query.get(submission.deadline_id)
-                            if deadline:
-                                context = {
-                                    'assignment_type': deadline.assignment_type,
-                                    'course_code': deadline.course_code
-                                }
-                        
-                        # Generate Summary & Rating
-                        ai_summary, ai_error = nlp_service.generate_ai_summary(text, context)
-                        
-                        if ai_error:
-                            current_app.logger.warning(f"AI analysis warning: {ai_error}")
-                        
-                        # 3. Consolidate
-                        # Note: We need to handle consolidation manually or call the service method if available
-                        # Checking nlp_service for consolidate method
-                        consolidated_results = local_results
-                        if hasattr(nlp_service, 'consolidate_nlp_results'):
-                            consolidated_results, _ = nlp_service.consolidate_nlp_results(local_results, ai_summary)
-                        
-                        # 4. Save to DB
-                        analysis.nlp_results = consolidated_results
-                        if ai_summary:
-                            analysis.ai_summary = ai_summary.get('summary')
-                            analysis.ai_insights = ai_summary
-                            
-                        # Update specific fields
-                        if 'readability' in local_results and local_results['readability']:
-                             analysis.flesch_kincaid_score = local_results['readability'].get('grade_level')
-                             analysis.readability_grade = local_results['readability'].get('reading_level')
-                             
-                        db.session.commit()
-                        current_app.logger.info(f"AI Rating & NLP analysis completed for submission {submission.id}")
-                        
-                    except Exception as nlp_e:
-                        current_app.logger.error(f"Post-upload AI analysis failed: {nlp_e}")
-                        # Do not fail request, just log
-
-        except Exception as e:
-            current_app.logger.error(f"Auto-analysis failed: {e}")
-            # Don't fail the upload, just log the error
-            submission.status = SubmissionStatus.PENDING
-            db.session.commit()
+        # Update status to processing and start background thread
+        submission.status = SubmissionStatus.PROCESSING
+        submission.processing_started_at = datetime.utcnow()
+        db.session.commit()
+        
+        # Start background analysis thread for speed
+        app = current_app._get_current_object()
+        thread = Thread(target=perform_full_analysis, args=(app, submission.id))
+        thread.daemon = True
+        thread.start()
+        
+        current_app.logger.info(f"Started background analysis for submission {submission.id}")
         
         # Refresh the submission to ensure all relationships are loaded
         db.session.refresh(submission)
@@ -824,23 +832,16 @@ def submit_drive_link():
             os.remove(file_path)
             
             # Return error with details about the existing submission
-            error_message = {
-                'error': 'This file has already been submitted',
+            return jsonify({
+                'error': 'Duplicate file submission detected',
+                'message': f'You have already submitted this specific file ("{existing_submission.original_filename}") on {existing_submission.created_at.strftime("%Y-%m-%d %H:%M:%S")}. To submit a new version, please ensure the file content has changed.',
                 'existing_submission': {
                     'job_id': existing_submission.job_id,
                     'submitted_at': existing_submission.created_at.isoformat(),
                     'original_filename': existing_submission.original_filename,
                     'student_id': existing_submission.student_id
                 }
-            }
-            
-            # Add specific message based on submission type
-            if existing_submission.google_drive_link == drive_link:
-                error_message['message'] = f'This Google Drive link was already submitted on {existing_submission.created_at.strftime("%Y-%m-%d %H:%M:%S")}'
-            else:
-                error_message['message'] = f'A file with identical content was already submitted on {existing_submission.created_at.strftime("%Y-%m-%d %H:%M:%S")}'
-            
-            return jsonify(error_message), 409  # 409 Conflict status code
+            }), 409  # 409 Conflict status code
         
         # Create folder based on deadline title
         if deadline_id:
@@ -891,96 +892,18 @@ def submit_drive_link():
                 pass
             return jsonify({'error': error}), 500
         
-        # Trigger automatic analysis
-        try:
-            from app.api.metadata import metadata_service
-            
-            # Update status to processing
-            submission.status = SubmissionStatus.PROCESSING
-            submission.processing_started_at = datetime.utcnow()
-            db.session.commit()
-            
-            # Extract metadata (using external Google Drive metadata for more accuracy)
-            doc_metadata, metadata_error = metadata_service.extract_docx_metadata(storage_path, external_metadata=metadata)
-
-            # Extract text
-            text, text_error = metadata_service.extract_document_text(storage_path)
-            if not text_error:
-                # Compute statistics
-                content_stats = metadata_service.compute_content_statistics(text)
-                is_complete, warnings = metadata_service.validate_document_completeness(content_stats, text)
-                
-                # Create or update analysis result
-                from app.models import AnalysisResult
-                analysis = AnalysisResult.query.filter_by(submission_id=submission.id).first()
-                if not analysis:
-                    analysis = AnalysisResult(submission_id=submission.id)
-                    db.session.add(analysis)
-                
-                analysis.document_metadata = doc_metadata
-                analysis.content_statistics = content_stats
-                analysis.document_text = text
-                analysis.is_complete_document = is_complete
-                analysis.validation_warnings = warnings
-                
-                # Mark as completed
-                submission.status = SubmissionStatus.COMPLETED
-                submission.processing_completed_at = datetime.utcnow()
-                db.session.commit()
-                
-                current_app.logger.info(f"Analysis completed for submission {submission.id}")
-                
-                # [INTEGRATION] Trigger AI Analysis IMMEDIATELY (Drive Link)
-                try:
-                    from app.api.nlp import get_nlp_service
-                    nlp_service = get_nlp_service()
-                    
-                    # 1. Local NLP
-                    local_results = nlp_service.perform_local_nlp_analysis(text)
-                    
-                    # 2. AI Analysis
-                    context = {}
-                    
-                    if submission.deadline_id:
-                        from app.models import Deadline
-                        deadline = Deadline.query.get(submission.deadline_id)
-                        if deadline:
-                            context = {
-                                'assignment_type': deadline.assignment_type,
-                                'course_code': deadline.course_code
-                            }
-                    
-                    # Generate Summary & Rating
-                    ai_summary, ai_error = nlp_service.generate_ai_summary(text, context)
-                    
-                    if ai_error:
-                         current_app.logger.warning(f"AI analysis warning: {ai_error}")
-
-                    # 3. Consolidate
-                    consolidated_results = local_results
-                    if hasattr(nlp_service, 'consolidate_nlp_results'):
-                        consolidated_results, _ = nlp_service.consolidate_nlp_results(local_results, ai_summary)
-                    
-                    # 4. Save to DB
-                    analysis.nlp_results = consolidated_results
-                    if ai_summary:
-                        analysis.ai_summary = ai_summary.get('summary')
-                        analysis.ai_insights = ai_summary
-
-                    if 'readability' in local_results and local_results['readability']:
-                         analysis.flesch_kincaid_score = local_results['readability'].get('grade_level')
-                         analysis.readability_grade = local_results['readability'].get('reading_level')
-
-                    db.session.commit()
-                    current_app.logger.info(f"AI Rating & NLP analysis completed for submission {submission.id} (Drive)")
-                    
-                except Exception as nlp_e:
-                    current_app.logger.error(f"Post-upload AI analysis failed (Drive): {nlp_e}")
-        except Exception as e:
-            current_app.logger.error(f"Auto-analysis failed: {e}")
-            # Don't fail the upload, just log the error
-            submission.status = SubmissionStatus.PENDING
-            db.session.commit()
+        # Update status to processing and start background thread
+        submission.status = SubmissionStatus.PROCESSING
+        submission.processing_started_at = datetime.utcnow()
+        db.session.commit()
+        
+        # Start background analysis thread for speed
+        app = current_app._get_current_object()
+        thread = Thread(target=perform_full_analysis, args=(app, submission.id))
+        thread.daemon = True
+        thread.start()
+        
+        current_app.logger.info(f"Started background analysis for drive submission {submission.id}")
         
         return jsonify({
             'message': 'Google Drive file retrieved successfully',

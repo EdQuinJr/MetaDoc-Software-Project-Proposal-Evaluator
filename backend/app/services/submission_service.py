@@ -139,25 +139,23 @@ class SubmissionService:
                 if student.student_id:
                     identity_student_ids.add(str(student.student_id).strip())
 
-        # If we can resolve identity, only compare duplicates within that identity.
-        # Otherwise, fallback to the existing behavior (scope-level duplicate check).
+        # If we can resolve identity, check if THIS student has submitted THIS specific file before.
         if identity_student_ids:
-            scope_query = scope_query.filter(Submission.student_id.in_(list(identity_student_ids)))
-
-        # Check by Google Drive link (for drive link submissions)
-        if drive_link:
-            drive_query = scope_query.filter(Submission.google_drive_link == drive_link)
-            existing = drive_query.first()
-            if existing:
-                return True, existing
-
-        # Check by file hash (for both uploads and drive links)
-        if file_hash:
-            hash_query = scope_query.filter(Submission.file_hash == file_hash)
-            existing = hash_query.first()
-            if existing:
-                return True, existing
+            identity_query = scope_query.filter(Submission.student_id.in_(list(identity_student_ids)))
+            
+            # Check if this specific student has already submitted this content
+            if drive_link:
+                existing = identity_query.filter(Submission.google_drive_link == drive_link).first()
+                if existing:
+                    return True, existing
+            
+            if file_hash:
+                existing = identity_query.filter(Submission.file_hash == file_hash).first()
+                if existing:
+                    return True, existing
         
+        # If no identical submission by the same student found, allow it.
+        # This allows different users to submit the same file, and the same user to submit different files.
         return False, None
     
     def create_submission_record(self, **kwargs):
